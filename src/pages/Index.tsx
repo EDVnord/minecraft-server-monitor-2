@@ -966,7 +966,7 @@ function Footer({ setPage }: { setPage: (p: string) => void }) {
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         <button onClick={() => setPage("home")} className="flex items-center gap-2">
           <span>⛏️</span>
-          <span className="font-display font-bold text-white/60 tracking-wider">Mine<span className="text-green-400">Top</span></span>
+          <span className="font-display font-bold text-white/60 tracking-wider">Mine<span className="text-green-400">ED</span></span>
         </button>
         <div className="flex gap-6 text-xs text-white/25">
           <button onClick={() => setPage("home")}    className="hover:text-white/50 transition-colors">Каталог</button>
