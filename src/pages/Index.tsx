@@ -584,11 +584,107 @@ function AddServerPage({ setPage }: { setPage: (p: string) => void }) {
   );
 }
 
+// ─── Модалка оплаты ───────────────────────────────────────────────────────────
+
+function PayModal({ plan, onClose }: { plan: typeof PLANS[number]; onClose: () => void }) {
+  const [email, setEmail]       = useState("");
+  const [serverId, setServerId] = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+
+  const handlePay = async () => {
+    if (!email.trim()) { setError("Введи email для получения чека"); return; }
+    setError("");
+    setLoading(true);
+    try {
+      const returnUrl = window.location.href;
+      const res = await fetch(`${API}/pay/init`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan:       plan.key,
+          email:      email.trim(),
+          server_id:  serverId ? Number(serverId) : null,
+          return_url: returnUrl,
+        }),
+      });
+      const data = await res.json();
+      if (data.payment_url) {
+        window.location.href = data.payment_url;
+      } else {
+        setError(data.error || "Ошибка создания платежа");
+      }
+    } catch {
+      setError("Сеть недоступна. Попробуй позже.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md glass-card rounded-2xl p-7 relative" onClick={e => e.stopPropagation()}
+        style={{ border: `1px solid ${plan.color}40`, boxShadow: `0 0 40px ${plan.color}15` }}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/30 hover:text-white/70 transition-colors">
+          <Icon name="X" size={18} />
+        </button>
+
+        <div className="mb-6">
+          <div className="text-xs font-mono uppercase tracking-widest mb-1" style={{ color: plan.color }}>Оплата через ЮКассу</div>
+          <h3 className="font-display text-2xl font-bold text-white uppercase">{plan.name}</h3>
+          <div className="flex items-end gap-1 mt-2">
+            <span className="font-display text-4xl font-bold text-white">{plan.price}₽</span>
+            <span className="text-white/30 mb-1">/месяц</span>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-white/40 uppercase tracking-widest font-mono mb-2 block">Email для чека *</label>
+            <input type="email" placeholder="your@email.ru" value={email} onChange={e => setEmail(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-green-500/45 transition-colors" />
+          </div>
+          <div>
+            <label className="text-xs text-white/40 uppercase tracking-widest font-mono mb-2 block">ID сервера (необязательно)</label>
+            <input type="number" placeholder="Введи ID сервера из каталога" value={serverId} onChange={e => setServerId(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-green-500/45 transition-colors" />
+            <p className="text-[11px] text-white/25 mt-1">После оплаты тариф применится к твоему серверу автоматически</p>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/25 rounded-xl text-red-400 text-xs">
+              <Icon name="AlertCircle" size={13} />
+              {error}
+            </div>
+          )}
+
+          <button onClick={handlePay} disabled={loading}
+            className="w-full py-3.5 rounded-xl font-bold text-sm transition-all duration-200 disabled:opacity-60 flex items-center justify-center gap-2 text-black"
+            style={{ background: loading ? "#666" : plan.color }}>
+            {loading
+              ? <><div className="w-4 h-4 rounded-full border-2 border-black/30 border-t-black animate-spin" /> Создаём платёж...</>
+              : <><Icon name="CreditCard" size={16} /> Оплатить {plan.price}₽</>
+            }
+          </button>
+
+          <div className="flex items-center justify-center gap-2 text-[11px] text-white/25">
+            <Icon name="Lock" size={11} />
+            Безопасная оплата через ЮКассу
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Страница: Тарифы ─────────────────────────────────────────────────────────
 
 function PricingPage({ setPage }: { setPage: (p: string) => void }) {
+  const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[number] | null>(null);
+
   return (
     <div className="min-h-screen pt-28 pb-16 px-5">
+      {selectedPlan && <PayModal plan={selectedPlan} onClose={() => setSelectedPlan(null)} />}
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-14">
           <div className="text-green-400 text-xs font-mono uppercase tracking-widest mb-3">// Продвижение</div>
@@ -621,7 +717,8 @@ function PricingPage({ setPage }: { setPage: (p: string) => void }) {
                   </li>
                 ))}
               </ul>
-              <button onClick={() => setPage("add")}
+              <button
+                onClick={() => plan.price === "0" ? setPage("add") : setSelectedPlan(plan)}
                 className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
                   plan.highlight ? "bg-amber-500 text-black hover:bg-amber-400 gold-glow"
                   : plan.price === "0" ? "bg-white/8 text-white border border-white/12 hover:bg-white/12"

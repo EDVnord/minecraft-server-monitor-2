@@ -1,17 +1,38 @@
 """
-API каталога Minecraft-серверов.
-GET  / — список серверов (фильтр, сортировка)
-POST / — добавить сервер (мгновенно, без модерации)
-POST /vote — проголосовать за сервер (1 раз в 24 ч с одного IP)
+API каталога Minecraft-серверов + оплата тарифов через ЮКассу.
+
+GET  /          — список серверов (фильтр, сортировка)
+POST /          — добавить сервер (мгновенно, без модерации)
+POST /vote      — голосовать за сервер (1 раз в 24 ч с одного IP)
+POST /pay/init  — создать платёж ЮКасса, получить ссылку
+POST /pay/notify — вебхук ЮКасса (подтверждение оплаты)
+GET  /pay/status — проверить статус заказа
 """
+import base64
 import json
 import os
+import random
+import urllib.request
 import psycopg2
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+}
+
+YOOKASSA_API = "https://api.yookassa.ru/v3"
+
+PLAN_PRICES = {
+    "standard": "499.00",
+    "vip":      "1299.00",
+    "premium":  "2999.00",
+}
+
+PLAN_NAMES = {
+    "standard": "Тариф Стандарт — продвижение сервера MineTop",
+    "vip":      "Тариф VIP — продвижение сервера MineTop",
+    "premium":  "Тариф Premium — продвижение сервера MineTop",
 }
 
 BANNER_COLORS = [
@@ -25,6 +46,8 @@ BANNER_COLORS = [
     "linear-gradient(135deg,#1c1917,#292524,#44403c)",
 ]
 
+
+# ─── DB ───────────────────────────────────────────────────────────────────────
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -62,6 +85,19 @@ def ensure_tables(cur):
         CREATE UNIQUE INDEX IF NOT EXISTS server_votes_unique_daily
         ON server_votes (server_id, voter_ip, DATE(voted_at))
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id          SERIAL PRIMARY KEY,
+            order_id    VARCHAR(64) UNIQUE NOT NULL,
+            server_id   INTEGER,
+            plan        VARCHAR(20) NOT NULL,
+            amount      VARCHAR(10) NOT NULL,
+            status      VARCHAR(20) NOT NULL DEFAULT 'pending',
+            payment_id  VARCHAR(64),
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            paid_at     TIMESTAMPTZ
+        )
+    """)
 
 
 def seed_demo(cur):
@@ -80,12 +116,33 @@ def seed_demo(cur):
     ]
     for row in demo:
         cur.execute(
-            """INSERT INTO servers
-               (name,ip,version,type,description,plan,votes,online,max_players,uptime,banner_color)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            "INSERT INTO servers (name,ip,version,type,description,plan,votes,online,max_players,uptime,banner_color) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             row,
         )
 
+
+# ─── ЮКасса ──────────────────────────────────────────────────────────────────
+
+def yookassa_request(endpoint: str, payload: dict, idempotence_key: str) -> dict:
+    shop_id    = os.environ["YOOKASSA_SHOP_ID"]
+    secret_key = os.environ["YOOKASSA_SECRET_KEY"]
+    creds      = base64.b64encode(f"{shop_id}:{secret_key}".encode()).decode()
+
+    data = json.dumps(payload).encode()
+    req  = urllib.request.Request(
+        f"{YOOKASSA_API}/{endpoint}",
+        data=data,
+        headers={
+            "Content-Type":    "application/json",
+            "Authorization":   f"Basic {creds}",
+            "Idempotence-Key": idempotence_key,
+        },
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read())
+
+
+# ─── Handler ──────────────────────────────────────────────────────────────────
 
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
@@ -102,7 +159,7 @@ def handler(event: dict, context) -> dict:
                 ensure_tables(cur)
                 seed_demo(cur)
 
-                # ── GET / — список серверов ────────────────────────────────
+                # ── GET / — список серверов ───────────────────────────────
                 if method == "GET" and path in ("", "/"):
                     type_filter = (event.get("queryStringParameters") or {}).get("type", "")
                     sort_by     = (event.get("queryStringParameters") or {}).get("sort", "votes")
@@ -114,8 +171,7 @@ def handler(event: dict, context) -> dict:
                         "new":    "CASE plan WHEN 'premium' THEN 0 WHEN 'vip' THEN 1 WHEN 'standard' THEN 2 ELSE 3 END, created_at DESC",
                     }.get(sort_by, "votes DESC")
 
-                    where_clauses = []
-                    params = []
+                    where_clauses, params = [], []
                     if type_filter and type_filter != "Все":
                         where_clauses.append("type = %s")
                         params.append(type_filter)
@@ -128,19 +184,18 @@ def handler(event: dict, context) -> dict:
                         f"SELECT id,name,ip,version,type,description,discord,site,plan,votes,online,max_players,uptime,banner_color,created_at FROM servers {where_sql} ORDER BY {order}",
                         params,
                     )
-                    rows = cur.fetchall()
                     cols = ["id","name","ip","version","type","description","discord","site","plan","votes","online","max_players","uptime","banner_color","created_at"]
                     servers = []
-                    for r in rows:
+                    for r in cur.fetchall():
                         s = dict(zip(cols, r))
-                        s["uptime"] = float(s["uptime"])
+                        s["uptime"]     = float(s["uptime"])
                         s["created_at"] = s["created_at"].isoformat()
                         servers.append(s)
                     return {"statusCode": 200, "headers": CORS, "body": json.dumps({"servers": servers, "total": len(servers)})}
 
-                # ── POST / — добавить сервер ───────────────────────────────
+                # ── POST / — добавить сервер ──────────────────────────────
                 if method == "POST" and path in ("", "/"):
-                    body = json.loads(event.get("body") or "{}")
+                    body    = json.loads(event.get("body") or "{}")
                     name    = (body.get("name") or "").strip()[:100]
                     ip_addr = (body.get("ip") or "").strip()[:100]
                     version = (body.get("version") or "1.20.4").strip()[:20]
@@ -152,28 +207,22 @@ def handler(event: dict, context) -> dict:
                     if not name or not ip_addr:
                         return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "name и ip обязательны"})}
 
-                    import random
                     banner = random.choice(BANNER_COLORS)
                     cur.execute(
-                        """INSERT INTO servers (name,ip,version,type,description,discord,site,plan,banner_color)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,'free',%s) RETURNING id""",
+                        "INSERT INTO servers (name,ip,version,type,description,discord,site,plan,banner_color) VALUES (%s,%s,%s,%s,%s,%s,%s,'free',%s) RETURNING id",
                         (name, ip_addr, version, stype, desc, discord, site, banner),
                     )
                     new_id = cur.fetchone()[0]
                     return {"statusCode": 201, "headers": CORS, "body": json.dumps({"id": new_id, "message": "Сервер добавлен"})}
 
-                # ── POST /vote — голосовать ────────────────────────────────
+                # ── POST /vote — голосовать ───────────────────────────────
                 if method == "POST" and path.endswith("/vote"):
                     body      = json.loads(event.get("body") or "{}")
                     server_id = int(body.get("server_id", 0))
                     if not server_id:
                         return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "server_id обязателен"})}
-
                     try:
-                        cur.execute(
-                            "INSERT INTO server_votes (server_id, voter_ip) VALUES (%s, %s)",
-                            (server_id, ip),
-                        )
+                        cur.execute("INSERT INTO server_votes (server_id, voter_ip) VALUES (%s, %s)", (server_id, ip))
                         cur.execute("UPDATE servers SET votes = votes + 1 WHERE id = %s RETURNING votes", (server_id,))
                         new_votes = cur.fetchone()[0]
                         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"votes": new_votes, "voted": True})}
@@ -181,8 +230,102 @@ def handler(event: dict, context) -> dict:
                         conn.rollback()
                         cur.execute("SELECT votes FROM servers WHERE id = %s", (server_id,))
                         row = cur.fetchone()
-                        votes = row[0] if row else 0
-                        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"votes": votes, "voted": False, "message": "Уже голосовали сегодня"})}
+                        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"votes": row[0] if row else 0, "voted": False, "message": "Уже голосовали сегодня"})}
+
+                # ── POST /pay/init — создать платёж ──────────────────────
+                if method == "POST" and path.endswith("/pay/init"):
+                    body      = json.loads(event.get("body") or "{}")
+                    plan      = body.get("plan", "")
+                    server_id = body.get("server_id")
+                    email     = (body.get("email") or "").strip()
+                    return_url = body.get("return_url", "https://minetop.ru")
+
+                    if plan not in PLAN_PRICES:
+                        return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Неизвестный тариф"})}
+
+                    amount   = PLAN_PRICES[plan]
+                    order_id = f"mt_{plan}_{server_id or 0}_{os.urandom(5).hex()}"
+
+                    cur.execute(
+                        "INSERT INTO orders (order_id, server_id, plan, amount) VALUES (%s, %s, %s, %s)",
+                        (order_id, server_id, plan, amount),
+                    )
+
+                    payload = {
+                        "amount":      {"value": amount, "currency": "RUB"},
+                        "capture":     True,
+                        "confirmation": {"type": "redirect", "return_url": return_url},
+                        "description": PLAN_NAMES[plan],
+                        "metadata":    {"order_id": order_id},
+                    }
+                    if email:
+                        payload["receipt"] = {
+                            "customer": {"email": email},
+                            "items": [{
+                                "description": PLAN_NAMES[plan],
+                                "quantity":    "1",
+                                "amount":      {"value": amount, "currency": "RUB"},
+                                "vat_code":    1,
+                            }],
+                        }
+
+                    result = yookassa_request("payments", payload, order_id)
+
+                    payment_id  = result.get("id", "")
+                    payment_url = result.get("confirmation", {}).get("confirmation_url", "")
+
+                    cur.execute(
+                        "UPDATE orders SET payment_id=%s WHERE order_id=%s",
+                        (payment_id, order_id),
+                    )
+
+                    return {"statusCode": 200, "headers": CORS, "body": json.dumps({
+                        "payment_url": payment_url,
+                        "order_id":    order_id,
+                        "payment_id":  payment_id,
+                    })}
+
+                # ── POST /pay/notify — вебхук ЮКасса ─────────────────────
+                if method == "POST" and path.endswith("/pay/notify"):
+                    body   = json.loads(event.get("body") or "{}")
+                    event_type = body.get("event", "")
+                    obj        = body.get("object", {})
+                    order_id   = (obj.get("metadata") or {}).get("order_id", "")
+
+                    if event_type == "payment.succeeded" and order_id:
+                        cur.execute(
+                            "UPDATE orders SET status='paid', paid_at=NOW() WHERE order_id=%s RETURNING server_id, plan",
+                            (order_id,),
+                        )
+                        row = cur.fetchone()
+                        if row and row[0]:
+                            cur.execute("UPDATE servers SET plan=%s WHERE id=%s", (row[1], row[0]))
+
+                    elif event_type in ("payment.canceled",) and order_id:
+                        cur.execute("UPDATE orders SET status='failed' WHERE order_id=%s", (order_id,))
+
+                    return {"statusCode": 200, "headers": CORS, "body": "OK"}
+
+                # ── GET /pay/status?order_id=xxx ──────────────────────────
+                if method == "GET" and path.endswith("/pay/status"):
+                    order_id = (event.get("queryStringParameters") or {}).get("order_id", "")
+                    if not order_id:
+                        return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "order_id обязателен"})}
+
+                    cur.execute(
+                        "SELECT status, plan, amount, paid_at FROM orders WHERE order_id=%s",
+                        (order_id,),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Заказ не найден"})}
+
+                    return {"statusCode": 200, "headers": CORS, "body": json.dumps({
+                        "status":  row[0],
+                        "plan":    row[1],
+                        "amount":  row[2],
+                        "paid_at": row[3].isoformat() if row[3] else None,
+                    })}
 
     finally:
         conn.close()

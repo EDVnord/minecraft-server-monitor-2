@@ -16,6 +16,14 @@
       "expectedStatus": 201,
       "expectedBody": { "message": "Сервер добавлен" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET /pay/status — несуществующий заказ",
+      "method": "GET",
+      "path": "/pay/status?order_id=nonexistent",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "Заказ не найден" },
+      "bodyMatcher": "partial"
     }
   ]
 }
