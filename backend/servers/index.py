@@ -244,7 +244,8 @@ def handler(event: dict, context) -> dict:
                         return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Неизвестный тариф"})}
 
                     amount   = PLAN_PRICES[plan]
-                    order_id = f"mt_{plan}_{server_id or 0}_{os.urandom(5).hex()}"
+                    # Берём order_id от фронта (уже вставлен в return_url), иначе генерируем
+                    order_id = str(body.get("temp_order_id") or f"mt_{plan}_{server_id or 0}_{os.urandom(5).hex()}")[:64]
 
                     cur.execute(
                         "INSERT INTO orders (order_id, server_id, plan, amount) VALUES (%s, %s, %s, %s)",

@@ -597,19 +597,24 @@ function PayModal({ plan, onClose }: { plan: typeof PLANS[number]; onClose: () =
     setError("");
     setLoading(true);
     try {
-      const returnUrl = window.location.href;
+      // Генерируем временный order_id на фронте чтобы сразу вставить в return_url
+      const tempOrderId = `mt_${plan.key}_${Date.now()}`;
+      const returnUrl   = `${window.location.origin}${window.location.pathname}?order_id=${tempOrderId}`;
+
       const res = await fetch(`${API}/pay/init`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          plan:       plan.key,
-          email:      email.trim(),
-          server_id:  serverId ? Number(serverId) : null,
-          return_url: returnUrl,
+          plan:        plan.key,
+          email:       email.trim(),
+          server_id:   serverId ? Number(serverId) : null,
+          return_url:  returnUrl,
+          temp_order_id: tempOrderId,
         }),
       });
       const data = await res.json();
       if (data.payment_url) {
+        // return_url уже содержит order_id — ЮКасса вернёт туда пользователя
         window.location.href = data.payment_url;
       } else {
         setError(data.error || "Ошибка создания платежа");
@@ -792,6 +797,167 @@ function PricingPage({ setPage }: { setPage: (p: string) => void }) {
   );
 }
 
+// ─── Страница: Успешная оплата ────────────────────────────────────────────────
+
+const PLAN_LABELS: Record<string, { name: string; color: string; icon: string }> = {
+  standard: { name: "Стандарт",  color: "#22c55e", icon: "⭐" },
+  vip:      { name: "VIP",       color: "#f59e0b", icon: "👑" },
+  premium:  { name: "Premium",   color: "#e879f9", icon: "💎" },
+};
+
+function PaySuccessPage({ setPage }: { setPage: (p: string) => void }) {
+  const [status, setStatus]   = useState<"loading" | "paid" | "pending" | "failed">("loading");
+  const [planInfo, setPlanInfo] = useState<{ plan: string; amount: string } | null>(null);
+
+  useEffect(() => {
+    const params  = new URLSearchParams(window.location.search);
+    const orderId = params.get("order_id");
+    if (!orderId) { setStatus("failed"); return; }
+
+    const check = async () => {
+      try {
+        const res  = await fetch(`${API}/pay/status?order_id=${orderId}`);
+        const data = await res.json();
+        setPlanInfo({ plan: data.plan, amount: data.amount });
+        if (data.status === "paid")    setStatus("paid");
+        else if (data.status === "failed") setStatus("failed");
+        else setStatus("pending");
+      } catch {
+        setStatus("failed");
+      }
+    };
+
+    check();
+    // Если pending — перепроверяем каждые 3 сек (макс 5 раз)
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      const res  = await fetch(`${API}/pay/status?order_id=${orderId}`).catch(() => null);
+      if (!res) return;
+      const data = await res.json();
+      if (data.status === "paid") { setStatus("paid"); clearInterval(interval); }
+      if (data.status === "failed" || attempts >= 5) { clearInterval(interval); }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const info = planInfo ? PLAN_LABELS[planInfo.plan] : null;
+
+  return (
+    <div className="min-h-screen pt-28 pb-16 px-5 flex items-center justify-center relative">
+      <div className="absolute inset-0 grid-bg opacity-30" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-3xl pointer-events-none"
+        style={{ background: status === "paid" ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.06)" }} />
+
+      <div className="relative z-10 max-w-md w-full text-center">
+        {status === "loading" && (
+          <>
+            <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6">
+              <div className="w-7 h-7 rounded-full border-2 border-green-500/30 border-t-green-400 animate-spin" />
+            </div>
+            <h2 className="font-display text-3xl font-bold text-white uppercase mb-2">Проверяем оплату</h2>
+            <p className="text-white/40 text-sm">Получаем подтверждение от ЮКассы...</p>
+          </>
+        )}
+
+        {status === "paid" && (
+          <>
+            {/* Конфетти-эффект */}
+            <div className="relative w-20 h-20 mx-auto mb-6">
+              <div className="absolute inset-0 rounded-full neon-glow animate-ping opacity-20"
+                style={{ background: info?.color || "#22c55e" }} />
+              <div className="relative w-20 h-20 rounded-full flex items-center justify-center text-4xl"
+                style={{ background: `${info?.color || "#22c55e"}18`, border: `1px solid ${info?.color || "#22c55e"}40` }}>
+                {info?.icon || "✅"}
+              </div>
+            </div>
+
+            <div className="text-xs font-mono uppercase tracking-widest mb-2 slide-up"
+              style={{ color: info?.color || "#22c55e" }}>
+              Оплата прошла успешно
+            </div>
+            <h2 className="font-display text-4xl font-bold text-white uppercase tracking-wide mb-3 slide-up d1">
+              Тариф {info?.name || ""} активирован!
+            </h2>
+            <p className="text-white/45 text-sm mb-8 slide-up d2">
+              Твой сервер уже поднялся в рейтинге. Игроки начнут находить его быстрее — проверь каталог!
+            </p>
+
+            {/* Что дальше */}
+            <div className="glass-card border border-white/8 rounded-2xl p-5 mb-6 text-left slide-up d3">
+              <div className="text-xs text-white/35 font-mono uppercase tracking-widest mb-3">Что теперь происходит</div>
+              {[
+                { icon: "TrendingUp", text: "Сервер поднялся в топ каталога" },
+                { icon: "Star",       text: "Значок тарифа появился на карточке" },
+                { icon: "Users",      text: "Больше игроков видят твой сервер" },
+                { icon: "Mail",       text: "Чек отправлен на указанный email" },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${info?.color || "#22c55e"}15` }}>
+                    <Icon name={item.icon} size={13} style={{ color: info?.color || "#22c55e" }} />
+                  </div>
+                  <span className="text-sm text-white/65">{item.text}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 justify-center slide-up d4">
+              <button onClick={() => setPage("home")}
+                className="px-6 py-3 bg-green-500 text-black font-bold rounded-xl hover:bg-green-400 neon-glow transition-all hover:scale-105">
+                В каталог
+              </button>
+              <button onClick={() => setPage("pricing")}
+                className="px-6 py-3 bg-white/6 border border-white/10 text-white/70 font-semibold rounded-xl hover:bg-white/10 transition-all">
+                Тарифы
+              </button>
+            </div>
+          </>
+        )}
+
+        {status === "pending" && (
+          <>
+            <div className="w-16 h-16 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto mb-6 text-3xl">
+              ⏳
+            </div>
+            <h2 className="font-display text-3xl font-bold text-white uppercase mb-2">Ожидаем подтверждения</h2>
+            <p className="text-white/40 text-sm mb-6">Платёж обрабатывается. Обычно это занимает до 1 минуты.</p>
+            <div className="flex items-center justify-center gap-2 text-amber-400 text-xs mb-6">
+              <div className="w-3 h-3 rounded-full border border-amber-400 border-t-transparent animate-spin" />
+              Автоматически обновляем статус...
+            </div>
+            <button onClick={() => setPage("home")}
+              className="px-6 py-3 bg-white/6 border border-white/10 text-white/70 font-semibold rounded-xl hover:bg-white/10 transition-all">
+              Вернуться в каталог
+            </button>
+          </>
+        )}
+
+        {status === "failed" && (
+          <>
+            <div className="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto mb-6 text-3xl">
+              ❌
+            </div>
+            <h2 className="font-display text-3xl font-bold text-white uppercase mb-2">Оплата не прошла</h2>
+            <p className="text-white/40 text-sm mb-6">Платёж был отменён или отклонён. Попробуй снова.</p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setPage("pricing")}
+                className="px-6 py-3 bg-green-500 text-black font-bold rounded-xl hover:bg-green-400 neon-glow transition-all">
+                Попробовать снова
+              </button>
+              <button onClick={() => setPage("home")}
+                className="px-6 py-3 bg-white/6 border border-white/10 text-white/70 font-semibold rounded-xl hover:bg-white/10 transition-all">
+                В каталог
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Footer ────────────────────────────────────────────────────────────────────
 
 function Footer({ setPage }: { setPage: (p: string) => void }) {
@@ -818,14 +984,29 @@ function Footer({ setPage }: { setPage: (p: string) => void }) {
 // ─── Root ──────────────────────────────────────────────────────────────────────
 
 export default function Index() {
-  const [page, setPage] = useState("home");
+  // Определяем страницу по URL-параметрам (после редиректа с ЮКассы)
+  const [page, setPage] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("order_id")) return "pay-success";
+    return "home";
+  });
+
+  const navigate = (p: string) => {
+    // Убираем query-параметры при навигации
+    if (p !== "pay-success") {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    setPage(p);
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      <Navbar page={page} setPage={setPage} />
-      {page === "home"    && <HomePage    setPage={setPage} />}
-      {page === "add"     && <AddServerPage setPage={setPage} />}
-      {page === "pricing" && <PricingPage  setPage={setPage} />}
-      <Footer setPage={setPage} />
+      <Navbar page={page} setPage={navigate} />
+      {page === "home"        && <HomePage       setPage={navigate} />}
+      {page === "add"         && <AddServerPage  setPage={navigate} />}
+      {page === "pricing"     && <PricingPage    setPage={navigate} />}
+      {page === "pay-success" && <PaySuccessPage setPage={navigate} />}
+      <Footer setPage={navigate} />
     </div>
   );
 }
