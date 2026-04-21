@@ -1,24 +1,33 @@
 """
-API каталога Minecraft-серверов + оплата тарифов через ЮКассу.
+API каталога Minecraft-серверов + авторизация + оплата тарифов через ЮКассу.
 
-GET  /          — список серверов (фильтр, сортировка)
-POST /          — добавить сервер (мгновенно, без модерации)
-POST /vote      — голосовать за сервер (1 раз в 24 ч с одного IP)
-POST /pay/init  — создать платёж ЮКасса, получить ссылку
-POST /pay/notify — вебхук ЮКасса (подтверждение оплаты)
-GET  /pay/status — проверить статус заказа
+GET  /              — список серверов
+POST /              — добавить сервер
+PUT  /{id}          — редактировать сервер (только владелец)
+POST /vote          — голосовать за сервер
+POST /auth/send     — отправить код на email
+POST /auth/verify   — проверить код, получить токен
+GET  /auth/me       — профиль + мои серверы
+POST /auth/logout   — выйти
+POST /pay/init      — создать платёж ЮКасса
+POST /pay/notify    — вебхук ЮКасса
+GET  /pay/status    — статус заказа
 """
 import base64
 import json
 import os
 import random
+import secrets
+import smtplib
 import urllib.request
 import psycopg2
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Auth-Token",
 }
 
 YOOKASSA_API = "https://api.yookassa.ru/v3"
@@ -53,7 +62,71 @@ def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
+def send_code_email(to_email: str, code: str):
+    host     = os.environ["SMTP_HOST"]
+    port     = int(os.environ.get("SMTP_PORT", "465"))
+    user     = os.environ["SMTP_USER"]
+    password = os.environ["SMTP_PASSWORD"]
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Твой код входа в MineED: {code}"
+    msg["From"]    = f"MineED <{user}>"
+    msg["To"]      = to_email
+    html = f"""<div style="font-family:sans-serif;background:#0d1117;padding:40px;border-radius:12px;max-width:480px;margin:0 auto">
+      <div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:2px;margin-bottom:8px">Mine<span style="color:#22c55e">ED</span></div>
+      <div style="color:#9ca3af;font-size:13px;margin-bottom:32px">Каталог Minecraft серверов</div>
+      <div style="color:#fff;font-size:15px;margin-bottom:24px">Твой код для входа:</div>
+      <div style="background:#1f2937;border:1px solid #374151;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
+        <span style="font-size:40px;font-weight:900;color:#22c55e;letter-spacing:12px">{code}</span>
+      </div>
+      <div style="color:#6b7280;font-size:12px">Код действует 10 минут. Если не запрашивал — проигнорируй.</div>
+    </div>"""
+    msg.attach(MIMEText(html, "html"))
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port) as s:
+            s.login(user, password); s.sendmail(user, to_email, msg.as_string())
+    else:
+        with smtplib.SMTP(host, port) as s:
+            s.starttls(); s.login(user, password); s.sendmail(user, to_email, msg.as_string())
+
+
+def get_user_by_token(cur, token: str):
+    cur.execute("""
+        SELECT u.id, u.email, u.created_at FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.token = %s AND s.expires_at > NOW()
+    """, (token,))
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {"id": row[0], "email": row[1], "created_at": row[2].isoformat()}
+
+
 def ensure_tables(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id         SERIAL PRIMARY KEY,
+            email      VARCHAR(200) UNIQUE NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS auth_codes (
+            id         SERIAL PRIMARY KEY,
+            email      VARCHAR(200) NOT NULL,
+            code       VARCHAR(6)   NOT NULL,
+            used       BOOLEAN      NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id         SERIAL PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES users(id),
+            token      VARCHAR(64) UNIQUE NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days')
+        )
+    """)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS servers (
             id           SERIAL PRIMARY KEY,
@@ -70,7 +143,8 @@ def ensure_tables(cur):
             max_players  INTEGER      NOT NULL DEFAULT 100,
             uptime       NUMERIC(4,1) NOT NULL DEFAULT 100.0,
             banner_color VARCHAR(200) DEFAULT 'linear-gradient(135deg,#064e3b,#065f46)',
-            created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+            created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            user_id      INTEGER
         )
     """)
     cur.execute("""
@@ -148,9 +222,11 @@ def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
-    method = event.get("httpMethod", "GET")
-    path   = event.get("path", "/").rstrip("/")
-    ip     = (event.get("requestContext") or {}).get("identity", {}).get("sourceIp", "0.0.0.0")
+    method  = event.get("httpMethod", "GET")
+    path    = event.get("path", "/").rstrip("/")
+    ip      = (event.get("requestContext") or {}).get("identity", {}).get("sourceIp", "0.0.0.0")
+    headers = event.get("headers") or {}
+    token   = headers.get("X-Auth-Token") or headers.get("x-auth-token", "")
 
     conn = get_conn()
     try:
@@ -158,6 +234,64 @@ def handler(event: dict, context) -> dict:
             with conn.cursor() as cur:
                 ensure_tables(cur)
                 seed_demo(cur)
+
+                # ── POST /auth/send — отправить код на email ─────────────
+                if method == "POST" and path.endswith("/auth/send"):
+                    body  = json.loads(event.get("body") or "{}")
+                    email = (body.get("email") or "").strip().lower()
+                    if not email or "@" not in email:
+                        return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Некорректный email"})}
+                    cur.execute("SELECT COUNT(*) FROM auth_codes WHERE email=%s AND created_at > NOW() - INTERVAL '1 minute'", (email,))
+                    if cur.fetchone()[0] > 0:
+                        return {"statusCode": 429, "headers": CORS, "body": json.dumps({"error": "Подожди минуту"})}
+                    code = str(random.randint(100000, 999999))
+                    cur.execute("INSERT INTO auth_codes (email, code) VALUES (%s, %s)", (email, code))
+                    conn.commit()
+                    send_code_email(email, code)
+                    return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+                # ── POST /auth/verify — проверить код ─────────────────────
+                if method == "POST" and path.endswith("/auth/verify"):
+                    body  = json.loads(event.get("body") or "{}")
+                    email = (body.get("email") or "").strip().lower()
+                    code  = (body.get("code") or "").strip()
+                    cur.execute("""
+                        SELECT id FROM auth_codes
+                        WHERE email=%s AND code=%s AND used=FALSE AND created_at > NOW() - INTERVAL '10 minutes'
+                        ORDER BY created_at DESC LIMIT 1
+                    """, (email, code))
+                    row = cur.fetchone()
+                    if not row:
+                        return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Неверный или просроченный код"})}
+                    cur.execute("UPDATE auth_codes SET used=TRUE WHERE id=%s", (row[0],))
+                    cur.execute("INSERT INTO users (email) VALUES (%s) ON CONFLICT (email) DO UPDATE SET email=EXCLUDED.email RETURNING id", (email,))
+                    user_id = cur.fetchone()[0]
+                    session_token = secrets.token_hex(32)
+                    cur.execute("INSERT INTO sessions (user_id, token) VALUES (%s, %s)", (user_id, session_token))
+                    return {"statusCode": 200, "headers": CORS, "body": json.dumps({"token": session_token, "email": email})}
+
+                # ── GET /auth/me — профиль + серверы пользователя ────────
+                if method == "GET" and path.endswith("/auth/me"):
+                    if not token:
+                        return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Не авторизован"})}
+                    user = get_user_by_token(cur, token)
+                    if not user:
+                        return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Сессия истекла"})}
+                    cur.execute("""
+                        SELECT id,name,ip,version,type,plan,votes,online,max_players,banner_color,created_at,description,discord,site
+                        FROM servers WHERE user_id=%s ORDER BY created_at DESC
+                    """, (user["id"],))
+                    cols = ["id","name","ip","version","type","plan","votes","online","max_players","banner_color","created_at","description","discord","site"]
+                    servers = [dict(zip(cols, r)) for r in cur.fetchall()]
+                    for s in servers:
+                        s["created_at"] = s["created_at"].isoformat()
+                    return {"statusCode": 200, "headers": CORS, "body": json.dumps({"user": user, "servers": servers})}
+
+                # ── POST /auth/logout — выйти ─────────────────────────────
+                if method == "POST" and path.endswith("/auth/logout"):
+                    if token:
+                        cur.execute("UPDATE sessions SET expires_at=NOW() WHERE token=%s", (token,))
+                    return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
                 # ── GET / — список серверов ───────────────────────────────
                 if method == "GET" and path in ("", "/"):
@@ -207,13 +341,68 @@ def handler(event: dict, context) -> dict:
                     if not name or not ip_addr:
                         return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "name и ip обязательны"})}
 
+                    # Привязываем сервер к пользователю если токен передан
+                    user_id = None
+                    if token:
+                        cur.execute("""
+                            SELECT u.id FROM sessions s JOIN users u ON u.id = s.user_id
+                            WHERE s.token = %s AND s.expires_at > NOW()
+                        """, (token,))
+                        row = cur.fetchone()
+                        if row:
+                            user_id = row[0]
+
                     banner = random.choice(BANNER_COLORS)
                     cur.execute(
-                        "INSERT INTO servers (name,ip,version,type,description,discord,site,plan,banner_color) VALUES (%s,%s,%s,%s,%s,%s,%s,'free',%s) RETURNING id",
-                        (name, ip_addr, version, stype, desc, discord, site, banner),
+                        "INSERT INTO servers (name,ip,version,type,description,discord,site,plan,banner_color,user_id) VALUES (%s,%s,%s,%s,%s,%s,%s,'free',%s,%s) RETURNING id",
+                        (name, ip_addr, version, stype, desc, discord, site, banner, user_id),
                     )
                     new_id = cur.fetchone()[0]
                     return {"statusCode": 201, "headers": CORS, "body": json.dumps({"id": new_id, "message": "Сервер добавлен"})}
+
+                # ── PUT /{id} — редактировать сервер (только владелец) ───
+                if method == "PUT" and path not in ("", "/"):
+                    try:
+                        server_id = int(path.split("/")[-1])
+                    except ValueError:
+                        return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Неверный ID"})}
+
+                    if not token:
+                        return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Нужна авторизация"})}
+
+                    cur.execute("""
+                        SELECT u.id FROM sessions s JOIN users u ON u.id = s.user_id
+                        WHERE s.token = %s AND s.expires_at > NOW()
+                    """, (token,))
+                    row = cur.fetchone()
+                    if not row:
+                        return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Сессия истекла"})}
+                    user_id = row[0]
+
+                    cur.execute("SELECT user_id FROM servers WHERE id = %s", (server_id,))
+                    srv = cur.fetchone()
+                    if not srv:
+                        return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Сервер не найден"})}
+                    if srv[0] != user_id:
+                        return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Нет доступа"})}
+
+                    body    = json.loads(event.get("body") or "{}")
+                    name    = (body.get("name") or "").strip()[:100]
+                    ip_addr = (body.get("ip") or "").strip()[:100]
+                    version = (body.get("version") or "1.20.4").strip()[:20]
+                    stype   = (body.get("type") or "Выживание").strip()[:50]
+                    desc    = (body.get("description") or "").strip()[:2000]
+                    discord = (body.get("discord") or "").strip()[:200]
+                    site    = (body.get("site") or "").strip()[:200]
+
+                    if not name or not ip_addr:
+                        return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "name и ip обязательны"})}
+
+                    cur.execute("""
+                        UPDATE servers SET name=%s, ip=%s, version=%s, type=%s, description=%s, discord=%s, site=%s
+                        WHERE id=%s
+                    """, (name, ip_addr, version, stype, desc, discord, site, server_id))
+                    return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
                 # ── POST /vote — голосовать ───────────────────────────────
                 if method == "POST" and path.endswith("/vote"):

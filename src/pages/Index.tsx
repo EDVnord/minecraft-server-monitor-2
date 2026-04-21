@@ -1,9 +1,127 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import Icon from "@/components/ui/icon";
 
 // ─── Конфиг API ───────────────────────────────────────────────────────────────
 
 const API = "https://functions.poehali.dev/09b533d2-c1db-4000-80a6-6d371d4a4df4";
+
+// ─── Авторизация: контекст ────────────────────────────────────────────────────
+
+interface AuthUser { id: number; email: string; created_at: string; }
+interface AuthCtx  { user: AuthUser | null; token: string; login: (token: string, email: string, id: number, created_at: string) => void; logout: () => void; }
+
+const AuthContext = createContext<AuthCtx>({ user: null, token: "", login: () => {}, logout: () => {} });
+const useAuth = () => useContext(AuthContext);
+
+function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [token, setToken] = useState(() => localStorage.getItem("mt_token") || "");
+  const [user,  setUser]  = useState<AuthUser | null>(() => {
+    try { return JSON.parse(localStorage.getItem("mt_user") || "null"); } catch { return null; }
+  });
+
+  const login = (t: string, email: string, id: number, created_at: string) => {
+    const u = { id, email, created_at };
+    setToken(t); setUser(u);
+    localStorage.setItem("mt_token", t);
+    localStorage.setItem("mt_user", JSON.stringify(u));
+  };
+
+  const logout = () => {
+    fetch(`${API}/auth/logout`, { method: "POST", headers: { "X-Auth-Token": token } });
+    setToken(""); setUser(null);
+    localStorage.removeItem("mt_token");
+    localStorage.removeItem("mt_user");
+  };
+
+  return <AuthContext.Provider value={{ user, token, login, logout }}>{children}</AuthContext.Provider>;
+}
+
+// ─── Модалка входа ────────────────────────────────────────────────────────────
+
+function LoginModal({ onClose }: { onClose: () => void }) {
+  const { login } = useAuth();
+  const [step,    setStep]    = useState<"email" | "code">("email");
+  const [email,   setEmail]   = useState("");
+  const [code,    setCode]    = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  const sendCode = async () => {
+    if (!email.trim() || !email.includes("@")) { setError("Введи корректный email"); return; }
+    setLoading(true); setError("");
+    try {
+      const res  = await fetch(`${API}/auth/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim().toLowerCase() }) });
+      const data = await res.json();
+      if (res.ok) setStep("code");
+      else setError(data.error || "Ошибка отправки");
+    } catch { setError("Сеть недоступна"); }
+    finally { setLoading(false); }
+  };
+
+  const verify = async () => {
+    if (code.length !== 6) { setError("Код — 6 цифр"); return; }
+    setLoading(true); setError("");
+    try {
+      const res  = await fetch(`${API}/auth/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim().toLowerCase(), code }) });
+      const data = await res.json();
+      if (res.ok) {
+        // Получаем полный профиль
+        const me = await fetch(`${API}/auth/me`, { headers: { "X-Auth-Token": data.token } });
+        const meData = await me.json();
+        login(data.token, data.email, meData.user.id, meData.user.created_at);
+        onClose();
+      } else setError(data.error || "Неверный код");
+    } catch { setError("Сеть недоступна"); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-sm glass-card rounded-2xl p-7 relative border border-white/10" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/30 hover:text-white/70"><Icon name="X" size={18} /></button>
+
+        <div className="mb-6">
+          <div className="text-xs font-mono uppercase tracking-widest text-green-400 mb-1">Вход в MineED</div>
+          <h3 className="font-display text-2xl font-bold text-white uppercase">
+            {step === "email" ? "Введи email" : "Введи код"}
+          </h3>
+          <p className="text-white/35 text-xs mt-1">
+            {step === "email" ? "Пришлём код — пароль не нужен" : `Код отправлен на ${email}`}
+          </p>
+        </div>
+
+        {step === "email" ? (
+          <div className="space-y-4">
+            <input type="email" placeholder="your@email.ru" value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && sendCode()}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-green-500/45 transition-colors" />
+            {error && <div className="text-red-400 text-xs flex items-center gap-1.5"><Icon name="AlertCircle" size={12}/>{error}</div>}
+            <button onClick={sendCode} disabled={loading}
+              className="w-full py-3 bg-green-500 text-black font-bold rounded-xl hover:bg-green-400 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
+              {loading ? <div className="w-4 h-4 rounded-full border-2 border-black/30 border-t-black animate-spin"/> : <Icon name="Mail" size={16}/>}
+              Получить код
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <input type="text" inputMode="numeric" placeholder="000000" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
+              onKeyDown={e => e.key === "Enter" && verify()}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 text-sm text-center text-2xl tracking-widest font-bold font-display focus:outline-none focus:border-green-500/45 transition-colors" />
+            {error && <div className="text-red-400 text-xs flex items-center gap-1.5"><Icon name="AlertCircle" size={12}/>{error}</div>}
+            <button onClick={verify} disabled={loading}
+              className="w-full py-3 bg-green-500 text-black font-bold rounded-xl hover:bg-green-400 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
+              {loading ? <div className="w-4 h-4 rounded-full border-2 border-black/30 border-t-black animate-spin"/> : <Icon name="LogIn" size={16}/>}
+              Войти
+            </button>
+            <button onClick={() => { setStep("email"); setCode(""); setError(""); }} className="w-full text-xs text-white/30 hover:text-white/50 transition-colors">
+              ← Другой email
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── Типы ─────────────────────────────────────────────────────────────────────
 
@@ -230,9 +348,9 @@ function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; o
           <Icon name={copied ? "Check" : "Copy"} size={12} className={copied ? "text-green-400" : "text-white/40"} />
           <span className="text-xs font-mono text-white/55 truncate max-w-[120px]">{server.ip}</span>
         </button>
-        <button className="w-full py-2 rounded-lg bg-green-500 text-black text-xs font-bold hover:bg-green-400 transition-all neon-glow flex items-center justify-center gap-1.5">
-          <Icon name="Play" size={12} />
-          Играть
+        <button onClick={handleCopy} className="w-full py-2 rounded-lg bg-green-500 text-black text-xs font-bold hover:bg-green-400 transition-all neon-glow flex items-center justify-center gap-1.5">
+          <Icon name={copied ? "Check" : "Play"} size={12} />
+          {copied ? "IP скопирован!" : "Играть"}
         </button>
       </div>
     </div>
@@ -242,8 +360,11 @@ function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; o
 // ─── Навбар ────────────────────────────────────────────────────────────────────
 
 function Navbar({ page, setPage }: { page: string; setPage: (p: string) => void }) {
-  const [scrolled, setScrolled] = useState(false);
-  const [open, setOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const [scrolled,   setScrolled]   = useState(false);
+  const [open,       setOpen]       = useState(false);
+  const [showLogin,  setShowLogin]  = useState(false);
+
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", h);
@@ -251,47 +372,83 @@ function Navbar({ page, setPage }: { page: string; setPage: (p: string) => void 
   }, []);
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "py-2 bg-[#080c10]/95 backdrop-blur-xl border-b border-white/5" : "py-4"}`}>
-      <div className="max-w-7xl mx-auto px-5 flex items-center justify-between">
-        <button onClick={() => setPage("home")} className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-green-500/18 neon-border flex items-center justify-center text-base">⛏️</div>
-          <span className="font-display text-lg font-bold text-white tracking-wider">
-            Mine<span className="neon-text">ED</span>
-          </span>
-        </button>
-        <div className="hidden md:flex items-center gap-1">
-          {NAV.map(n => (
-            <button key={n.id} onClick={() => setPage(n.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                page === n.id ? "text-green-400 bg-green-500/10 neon-border" : "text-white/55 hover:text-white/85 hover:bg-white/5"
-              }`}>{n.label}</button>
-          ))}
-        </div>
-        <div className="hidden md:flex items-center gap-3">
-          <button onClick={() => setPage("add")}
-            className="px-5 py-2 bg-green-500 text-black font-bold text-sm rounded-xl hover:bg-green-400 neon-glow transition-all hover:scale-105">
-            + Добавить сервер
+    <>
+      {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "py-2 bg-[#080c10]/95 backdrop-blur-xl border-b border-white/5" : "py-4"}`}>
+        <div className="max-w-7xl mx-auto px-5 flex items-center justify-between">
+          <button onClick={() => setPage("home")} className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-green-500/18 neon-border flex items-center justify-center text-base">⛏️</div>
+            <span className="font-display text-lg font-bold text-white tracking-wider">
+              Mine<span className="neon-text">ED</span>
+            </span>
+          </button>
+          <div className="hidden md:flex items-center gap-1">
+            {NAV.map(n => (
+              <button key={n.id} onClick={() => setPage(n.id)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  page === n.id ? "text-green-400 bg-green-500/10 neon-border" : "text-white/55 hover:text-white/85 hover:bg-white/5"
+                }`}>{n.label}</button>
+            ))}
+          </div>
+          <div className="hidden md:flex items-center gap-2">
+            {user ? (
+              <>
+                <button onClick={() => setPage("cabinet")}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                    page === "cabinet" ? "bg-green-500/12 text-green-400 neon-border" : "bg-white/5 text-white/60 border border-white/8 hover:bg-white/8"
+                  }`}>
+                  <Icon name="User" size={14} />
+                  {user.email.split("@")[0]}
+                </button>
+                <button onClick={() => setPage("add")}
+                  className="px-4 py-2 bg-green-500 text-black font-bold text-sm rounded-xl hover:bg-green-400 neon-glow transition-all hover:scale-105">
+                  + Добавить
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setShowLogin(true)}
+                  className="px-4 py-2 bg-white/6 border border-white/10 text-white/70 text-sm font-semibold rounded-xl hover:bg-white/10 transition-all">
+                  Войти
+                </button>
+                <button onClick={() => setPage("add")}
+                  className="px-4 py-2 bg-green-500 text-black font-bold text-sm rounded-xl hover:bg-green-400 neon-glow transition-all hover:scale-105">
+                  + Добавить сервер
+                </button>
+              </>
+            )}
+          </div>
+          <button onClick={() => setOpen(!open)} className="md:hidden text-white/60 hover:text-white">
+            <Icon name={open ? "X" : "Menu"} size={22} />
           </button>
         </div>
-        <button onClick={() => setOpen(!open)} className="md:hidden text-white/60 hover:text-white">
-          <Icon name={open ? "X" : "Menu"} size={22} />
-        </button>
-      </div>
-      {open && (
-        <div className="md:hidden mt-2 mx-4 rounded-xl bg-[#0d1117] border border-white/8 p-3 space-y-1">
-          {NAV.map(n => (
-            <button key={n.id} onClick={() => { setPage(n.id); setOpen(false); }}
-              className="w-full text-left px-4 py-2.5 rounded-lg text-sm text-white/75 hover:bg-white/5">{n.label}</button>
-          ))}
-          <div className="pt-2 border-t border-white/5">
-            <button onClick={() => { setPage("add"); setOpen(false); }}
-              className="w-full py-2.5 bg-green-500 text-black font-bold text-sm rounded-xl">
-              + Добавить сервер
-            </button>
+        {open && (
+          <div className="md:hidden mt-2 mx-4 rounded-xl bg-[#0d1117] border border-white/8 p-3 space-y-1">
+            {NAV.map(n => (
+              <button key={n.id} onClick={() => { setPage(n.id); setOpen(false); }}
+                className="w-full text-left px-4 py-2.5 rounded-lg text-sm text-white/75 hover:bg-white/5">{n.label}</button>
+            ))}
+            <div className="pt-2 border-t border-white/5 space-y-2">
+              {user ? (
+                <button onClick={() => { setPage("cabinet"); setOpen(false); }}
+                  className="w-full py-2.5 bg-white/6 border border-white/10 text-white/70 font-semibold text-sm rounded-xl">
+                  Мой кабинет
+                </button>
+              ) : (
+                <button onClick={() => { setShowLogin(true); setOpen(false); }}
+                  className="w-full py-2.5 bg-white/6 border border-white/10 text-white/70 font-semibold text-sm rounded-xl">
+                  Войти
+                </button>
+              )}
+              <button onClick={() => { setPage("add"); setOpen(false); }}
+                className="w-full py-2.5 bg-green-500 text-black font-bold text-sm rounded-xl">
+                + Добавить сервер
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-    </nav>
+        )}
+      </nav>
+    </>
   );
 }
 
@@ -1026,6 +1183,216 @@ function PaySuccessPage({ setPage }: { setPage: (p: string) => void }) {
   );
 }
 
+// ─── Страница: Личный кабинет ─────────────────────────────────────────────────
+
+const PLAN_PRICE_LABELS: Record<string, string> = { free: "Бесплатно", standard: "99₽/мес", vip: "299₽/мес", premium: "599₽/мес" };
+
+function CabinetPage({ setPage }: { setPage: (p: string) => void }) {
+  const { user, token, logout } = useAuth();
+  const [servers,  setServers]  = useState<Server[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [editing,  setEditing]  = useState<Server | null>(null);
+  const [form,     setForm]     = useState({ name: "", ip: "", version: "", type: "", description: "", discord: "", site: "" });
+  const [saving,   setSaving]   = useState(false);
+  const [saveMsg,  setSaveMsg]  = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${API}/auth/me`, { headers: { "X-Auth-Token": token } })
+      .then(r => r.json())
+      .then(d => { setServers(d.servers || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [user, token]);
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center pt-24">
+        <div className="text-center">
+          <div className="text-5xl mb-4">🔒</div>
+          <h2 className="font-display text-2xl font-bold text-white uppercase mb-2">Нужна авторизация</h2>
+          <p className="text-white/40 text-sm mb-6">Войди чтобы управлять серверами</p>
+          <button onClick={() => setPage("home")} className="px-6 py-3 bg-green-500 text-black font-bold rounded-xl hover:bg-green-400 transition-all">
+            На главную
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const startEdit = (s: Server) => {
+    setEditing(s);
+    setForm({ name: s.name, ip: s.ip, version: s.version, type: s.type, description: s.description || "", discord: s.discord || "", site: s.site || "" });
+    setSaveMsg("");
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSaving(true); setSaveMsg("");
+    try {
+      const res = await fetch(`${API}/${editing.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Auth-Token": token },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setServers(prev => prev.map(s => s.id === editing.id ? { ...s, ...form } : s));
+        setSaveMsg("Сохранено!");
+        setTimeout(() => setEditing(null), 1000);
+      } else setSaveMsg(data.error || "Ошибка сохранения");
+    } catch { setSaveMsg("Сеть недоступна"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="min-h-screen pt-28 pb-16 px-5">
+      <div className="max-w-3xl mx-auto">
+
+        {/* Шапка */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-widest text-green-400 mb-1">Личный кабинет</div>
+            <h2 className="font-display text-3xl font-bold text-white uppercase">{user.email.split("@")[0]}</h2>
+            <div className="text-xs text-white/30 mt-0.5">{user.email}</div>
+          </div>
+          <button onClick={() => { logout(); setPage("home"); }}
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white/50 text-sm rounded-xl hover:bg-white/8 transition-all">
+            <Icon name="LogOut" size={14} />
+            Выйти
+          </button>
+        </div>
+
+        {/* Мои серверы */}
+        <div className="glass-card border border-white/8 rounded-2xl overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+            <h3 className="font-display text-lg font-bold text-white uppercase">Мои серверы</h3>
+            <button onClick={() => setPage("add")}
+              className="flex items-center gap-1.5 px-4 py-2 bg-green-500 text-black text-xs font-bold rounded-xl hover:bg-green-400 transition-all">
+              <Icon name="Plus" size={12} />
+              Добавить
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="py-12 flex justify-center"><div className="w-6 h-6 rounded-full border-2 border-green-500/30 border-t-green-400 animate-spin"/></div>
+          ) : servers.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="text-4xl mb-3">⛏️</div>
+              <p className="text-white/35 text-sm">У тебя пока нет серверов</p>
+              <button onClick={() => setPage("add")} className="mt-4 px-5 py-2.5 bg-green-500 text-black font-bold text-sm rounded-xl hover:bg-green-400 transition-all">
+                Добавить первый сервер
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {servers.map(s => (
+                <div key={s.id} className="px-6 py-4 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl flex-shrink-0" style={{ background: s.banner_color }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-white text-sm truncate">{s.name}</div>
+                    <div className="text-xs text-white/35 font-mono">{s.ip}</div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${PLAN_BADGE[s.plan]?.cls || "text-white/30"}`}>
+                        {PLAN_BADGE[s.plan]?.label || "Бесплатно"}
+                      </span>
+                      <span className="text-[10px] text-white/30">{PLAN_PRICE_LABELS[s.plan]}</span>
+                      <span className="text-[10px] text-amber-400">♥ {s.votes}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => startEdit(s)}
+                      className="px-3 py-1.5 bg-white/6 border border-white/10 text-white/60 text-xs rounded-lg hover:bg-white/10 transition-all flex items-center gap-1">
+                      <Icon name="Pencil" size={11} /> Изменить
+                    </button>
+                    <button onClick={() => setPage("pricing")}
+                      className="px-3 py-1.5 bg-green-500/12 border border-green-500/25 text-green-400 text-xs rounded-lg hover:bg-green-500/20 transition-all flex items-center gap-1">
+                      <Icon name="TrendingUp" size={11} /> Продвинуть
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Модалка редактирования */}
+        {editing && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setEditing(null)}>
+            <div className="w-full max-w-lg glass-card border border-white/10 rounded-2xl p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-display text-xl font-bold text-white uppercase">Редактировать сервер</h3>
+                <button onClick={() => setEditing(null)} className="text-white/30 hover:text-white/70"><Icon name="X" size={18}/></button>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { key: "name",        label: "Название *",     placeholder: "Мой сервер" },
+                  { key: "ip",          label: "IP адрес *",     placeholder: "play.myserver.ru" },
+                  { key: "version",     label: "Версия",         placeholder: "1.21.1" },
+                  { key: "description", label: "Описание",       placeholder: "Расскажи об сервере..." },
+                  { key: "discord",     label: "Discord",        placeholder: "discord.gg/myserver" },
+                  { key: "site",        label: "Сайт",           placeholder: "https://myserver.ru" },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="text-[11px] text-white/35 uppercase tracking-widest font-mono mb-1 block">{f.label}</label>
+                    {f.key === "description" ? (
+                      <textarea placeholder={f.placeholder} value={form[f.key as keyof typeof form]}
+                        onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} rows={3}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-green-500/45 transition-colors resize-none" />
+                    ) : (
+                      <input type="text" placeholder={f.placeholder} value={form[f.key as keyof typeof form]}
+                        onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-green-500/45 transition-colors" />
+                    )}
+                  </div>
+                ))}
+                <div>
+                  <label className="text-[11px] text-white/35 uppercase tracking-widest font-mono mb-1 block">Режим</label>
+                  <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-green-500/45 transition-colors">
+                    {["Выживание","PvP","SkyBlock","Анархия","Мини-игры","Ролевой","Творчество","Хардкор"].map(t => (
+                      <option key={t} value={t} className="bg-[#0d1117]">{t}</option>
+                    ))}
+                  </select>
+                </div>
+                {saveMsg && <div className={`text-xs text-center py-2 rounded-lg ${saveMsg === "Сохранено!" ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"}`}>{saveMsg}</div>}
+                <button onClick={saveEdit} disabled={saving}
+                  className="w-full py-3 bg-green-500 text-black font-bold rounded-xl hover:bg-green-400 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
+                  {saving ? <div className="w-4 h-4 rounded-full border-2 border-black/30 border-t-black animate-spin"/> : <Icon name="Save" size={15}/>}
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Быстрые действия */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="glass-card border border-white/8 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-green-500/12 flex items-center justify-center"><Icon name="TrendingUp" size={16} className="text-green-400"/></div>
+              <div className="font-semibold text-white text-sm">Продвижение</div>
+            </div>
+            <p className="text-xs text-white/40 mb-4">Поднять в топ, купить VIP или Premium тариф</p>
+            <button onClick={() => setPage("pricing")} className="w-full py-2.5 bg-green-500/12 border border-green-500/25 text-green-400 text-sm font-semibold rounded-xl hover:bg-green-500/20 transition-all">
+              Перейти к тарифам
+            </button>
+          </div>
+          <div className="glass-card border border-white/8 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/12 flex items-center justify-center"><Icon name="Zap" size={16} className="text-amber-400"/></div>
+              <div className="font-semibold text-white text-sm">Разовый буст</div>
+            </div>
+            <p className="text-xs text-white/40 mb-4">Поднять сервер в топ на 24ч всего за 49₽</p>
+            <button onClick={() => setPage("pricing")} className="w-full py-2.5 bg-amber-500/12 border border-amber-500/25 text-amber-400 text-sm font-semibold rounded-xl hover:bg-amber-500/20 transition-all">
+              Поднять за 49₽
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Footer ────────────────────────────────────────────────────────────────────
 
 function Footer({ setPage }: { setPage: (p: string) => void }) {
@@ -1051,8 +1418,7 @@ function Footer({ setPage }: { setPage: (p: string) => void }) {
 
 // ─── Root ──────────────────────────────────────────────────────────────────────
 
-export default function Index() {
-  // Определяем страницу по URL-параметрам (после редиректа с ЮКассы)
+function AppInner() {
   const [page, setPage] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("order_id")) return "pay-success";
@@ -1060,10 +1426,7 @@ export default function Index() {
   });
 
   const navigate = (p: string) => {
-    // Убираем query-параметры при навигации
-    if (p !== "pay-success") {
-      window.history.replaceState({}, "", window.location.pathname);
-    }
+    if (p !== "pay-success") window.history.replaceState({}, "", window.location.pathname);
     setPage(p);
   };
 
@@ -1074,7 +1437,16 @@ export default function Index() {
       {page === "add"         && <AddServerPage  setPage={navigate} />}
       {page === "pricing"     && <PricingPage    setPage={navigate} />}
       {page === "pay-success" && <PaySuccessPage setPage={navigate} />}
+      {page === "cabinet"     && <CabinetPage    setPage={navigate} />}
       <Footer setPage={navigate} />
     </div>
+  );
+}
+
+export default function Index() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   );
 }
