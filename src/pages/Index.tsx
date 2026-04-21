@@ -1030,7 +1030,7 @@ function Footer({ setPage }: { setPage: (p: string) => void }) {
           <span>Правила</span>
           <span>Поддержка</span>
         </div>
-        <div className="text-xs text-white/18">© 2024 MineED.ru</div>
+        <div className="text-xs text-white/18">© 2026 MineED.ru</div>
       </div>
     </footer>
   );
