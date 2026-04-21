@@ -119,111 +119,121 @@ function Spinner() {
   );
 }
 
+// ─── Демо-серверы (показываются пока база пустая) ─────────────────────────────
+
+const DEMO_SERVERS: Server[] = [
+  { id: -1, name: "CraftMine | Выживание, Анархия, SkyBlock", ip: "play.craftmine.ru", version: "1.21.1", type: "Выживание", description: "Лучший сервер выживания с анархией и SkyBlock. Без доната, честная игра!", discord: "", site: "", plan: "premium", votes: 2841, online: 1843, max_players: 3000, uptime: 99.2, banner_color: "linear-gradient(135deg,#1a0533,#6d28d9)", created_at: new Date(Date.now() - 10 * 86400000).toISOString() },
+  { id: -2, name: "FunnyPvP | PvP, Бедварс, Мини-игры", ip: "play.funnypvp.ru", version: "1.20.4", type: "PvP", description: "Топовый PvP сервер с бедварсами и мини-играми. Ежедневные турниры!", discord: "", site: "", plan: "vip", votes: 1537, online: 612, max_players: 1000, uptime: 97.8, banner_color: "linear-gradient(135deg,#1c0a0a,#dc2626)", created_at: new Date(Date.now() - 30 * 86400000).toISOString() },
+  { id: -3, name: "SkyWorld | SkyBlock, Фарм, Экономика", ip: "play.skyworld.ru", version: "1.21.1", type: "SkyBlock", description: "Уникальный SkyBlock с экономикой, фермами и кланами. Заходи — не пожалеешь!", discord: "", site: "", plan: "standard", votes: 934, online: 289, max_players: 500, uptime: 98.5, banner_color: "linear-gradient(135deg,#0a1a2e,#0ea5e9)", created_at: new Date(Date.now() - 5 * 86400000).toISOString() },
+  { id: -4, name: "AnarxiaRU | Анархия 1.21", ip: "anarxia.ru", version: "1.21.1", type: "Анархия", description: "Честная анархия без правил. Гриф, кража, PvP — всё разрешено.", discord: "", site: "", plan: "free", votes: 412, online: 74, max_players: 200, uptime: 95.1, banner_color: "linear-gradient(135deg,#0f0f0f,#374151)", created_at: new Date(Date.now() - 2 * 86400000).toISOString() },
+  { id: -5, name: "MegaCraft | Творчество, Ролевой", ip: "play.megacraft.ru", version: "1.20.1", type: "Творчество", description: "Большой ролевой сервер с творческим режимом и своей экономикой.", discord: "", site: "", plan: "free", votes: 187, online: 43, max_players: 300, uptime: 96.0, banner_color: "linear-gradient(135deg,#0a1f0a,#15803d)", created_at: new Date(Date.now() - 1 * 86400000).toISOString() },
+];
+
 // ─── Карточка сервера ─────────────────────────────────────────────────────────
 
 function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; onVoted: (id: number, votes: number) => void }) {
-  const [voting, setVoting] = useState(false);
+  const [voting, setVoting]       = useState(false);
   const [alreadyVoted, setAlreadyVoted] = useState(false);
-  const badge = PLAN_BADGE[server.plan];
+  const [copied, setCopied]       = useState(false);
+  const badge     = PLAN_BADGE[server.plan];
   const isPremium = server.plan === "premium";
   const isVip     = server.plan === "vip";
+  const isNew     = Date.now() - new Date(server.created_at).getTime() < 48 * 3600 * 1000;
+  const isDemo    = server.id < 0;
 
   const handleVote = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (voting || alreadyVoted) return;
+    if (voting || alreadyVoted || isDemo) return;
     setVoting(true);
     try {
-      const res = await fetch(`${API}/vote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ server_id: server.id }),
-      });
+      const res  = await fetch(`${API}/vote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ server_id: server.id }) });
       const data = await res.json();
       if (data.voted === false) setAlreadyVoted(true);
       onVoted(server.id, data.votes);
-    } finally {
-      setVoting(false);
-    }
+    } finally { setVoting(false); }
   };
 
-  const isNew = Date.now() - new Date(server.created_at).getTime() < 48 * 3600 * 1000;
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(server.ip).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+  };
 
   return (
-    <div className={`group relative rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.012] hover:-translate-y-0.5 cursor-pointer ${
-      isPremium ? "neon-border shadow-[0_0_30px_rgba(34,197,94,0.12)]"
-      : isVip   ? "gold-border shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+    <div className={`group relative flex flex-col sm:flex-row gap-0 rounded-xl overflow-hidden transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
+      isPremium ? "neon-border shadow-[0_0_24px_rgba(34,197,94,0.1)]"
+      : isVip   ? "gold-border shadow-[0_0_16px_rgba(245,158,11,0.08)]"
       : "glass-card hover:border-white/14"
     }`}>
-      {/* Баннер */}
-      <div className="h-20 relative overflow-hidden" style={{ background: server.banner_color }}>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60" />
-        <div className={`absolute top-3 left-3 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold font-display ${
+
+      {/* Левая часть — номер + голоса */}
+      <div className="flex sm:flex-col items-center justify-between sm:justify-start gap-3 sm:gap-0 px-4 py-3 sm:py-4 sm:w-16 bg-white/2 border-b sm:border-b-0 sm:border-r border-white/5 flex-shrink-0">
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold font-display flex-shrink-0 ${
           rank === 1 ? "bg-amber-500 text-black"
           : rank === 2 ? "bg-slate-400 text-black"
-          : rank === 3 ? "bg-amber-700 text-white"
-          : "bg-black/40 text-white/70 border border-white/15"
+          : rank === 3 ? "bg-amber-700/80 text-white"
+          : "bg-white/8 text-white/50"
         }`}>{rank}</div>
-        {isNew && (
-          <div className="absolute top-3 right-3 px-2 py-0.5 bg-green-500 text-black text-[10px] font-bold rounded-full uppercase tracking-wide">
-            Новый
+        <button
+          onClick={handleVote}
+          disabled={voting || alreadyVoted || isDemo}
+          className={`flex flex-col items-center gap-0.5 mt-auto transition-all ${
+            alreadyVoted ? "text-amber-400 cursor-default"
+            : isDemo     ? "text-white/20 cursor-default"
+            : "text-white/35 hover:text-green-400"
+          }`}
+        >
+          {voting
+            ? <div className="w-4 h-4 rounded-full border border-current border-t-transparent animate-spin" />
+            : <Icon name="ThumbsUp" size={14} />}
+          <span className="text-[11px] font-bold font-mono">{server.votes.toLocaleString("ru")}</span>
+        </button>
+      </div>
+
+      {/* Баннер */}
+      <div className="sm:w-52 h-24 sm:h-auto flex-shrink-0 relative overflow-hidden"
+        style={{ background: server.banner_color }}>
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/30" />
+        {badge.label && (
+          <div className={`absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold rounded-full ${badge.cls}`}>
+            {badge.label}
           </div>
         )}
-        {badge.label && (
-          <div className={`absolute bottom-2 right-3 px-2 py-0.5 text-[10px] font-semibold rounded-full ${badge.cls}`}>
-            {badge.label}
+        {isNew && (
+          <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-green-500 text-black text-[10px] font-bold rounded-full uppercase tracking-wide">
+            Новый
           </div>
         )}
       </div>
 
-      {/* Тело */}
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="min-w-0">
-            <h3 className="font-display text-base font-bold text-white uppercase tracking-wide truncate group-hover:text-green-300 transition-colors">
-              {server.name}
-            </h3>
-            <div className="text-[11px] text-white/35 font-mono truncate">{server.ip}</div>
-          </div>
+      {/* Основная информация */}
+      <div className="flex-1 min-w-0 px-4 py-3 flex flex-col justify-center gap-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-display text-sm font-bold text-white uppercase tracking-wide leading-tight group-hover:text-green-300 transition-colors line-clamp-2">
+            {server.name}
+          </h3>
+          {isNew && <span className="hidden"/>}
+        </div>
+        <p className="text-xs text-white/40 line-clamp-1">{server.description}</p>
+        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+          <span className="px-2 py-0.5 bg-white/5 border border-white/8 rounded-md text-[10px] text-white/40 font-mono">{server.version}</span>
+          <span className="px-2 py-0.5 bg-green-500/8 border border-green-500/18 rounded-md text-[10px] text-green-400/70">{server.type}</span>
           <OnlineBadge online={server.online} max={server.max_players} />
         </div>
+      </div>
 
-        <p className="text-xs text-white/50 leading-relaxed mb-3 line-clamp-2">{server.description}</p>
-
-        <div className="flex flex-wrap gap-1 mb-3">
-          <span className="px-2 py-0.5 bg-white/5 border border-white/8 rounded-md text-[10px] text-white/40 font-mono">
-            {server.version}
-          </span>
-          <span className="px-2 py-0.5 bg-green-500/8 border border-green-500/18 rounded-md text-[10px] text-green-400/70">
-            {server.type}
-          </span>
-        </div>
-
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-white/30 font-mono">Голоса</span>
-            <span className="text-[10px] text-amber-400 font-semibold">{server.votes.toLocaleString("ru")}</span>
-          </div>
-          <VoteBar votes={server.votes} />
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={handleVote}
-            disabled={voting || alreadyVoted}
-            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 ${
-              alreadyVoted
-                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-default"
-                : "bg-white/6 text-white/70 border border-white/10 hover:bg-amber-500/12 hover:text-amber-400 hover:border-amber-500/25"
-            }`}
-          >
-            {voting ? <div className="w-3 h-3 rounded-full border border-current border-t-transparent animate-spin" /> : <Icon name="ThumbsUp" size={12} />}
-            {alreadyVoted ? "Голос засчитан" : "Голосовать"}
-          </button>
-          <button className="flex-1 py-2 rounded-xl text-xs font-semibold bg-green-500/12 text-green-400 border border-green-500/25 hover:bg-green-500/20 transition-all duration-200 flex items-center justify-center gap-1.5">
-            <Icon name="ExternalLink" size={12} />
-            Подробнее
-          </button>
-        </div>
+      {/* Правая часть — IP + кнопка */}
+      <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 px-4 py-3 sm:py-4 sm:w-48 border-t sm:border-t-0 sm:border-l border-white/5 flex-shrink-0">
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/4 border border-white/8 hover:bg-white/8 transition-all group/ip w-full justify-center"
+        >
+          <Icon name={copied ? "Check" : "Copy"} size={12} className={copied ? "text-green-400" : "text-white/40"} />
+          <span className="text-xs font-mono text-white/55 truncate max-w-[120px]">{server.ip}</span>
+        </button>
+        <button className="w-full py-2 rounded-lg bg-green-500 text-black text-xs font-bold hover:bg-green-400 transition-all neon-glow flex items-center justify-center gap-1.5">
+          <Icon name="Play" size={12} />
+          Играть
+        </button>
       </div>
     </div>
   );
@@ -431,17 +441,20 @@ function HomePage({ setPage }: { setPage: (p: string) => void }) {
                 Повторить
               </button>
             </div>
-          ) : servers.length === 0 ? (
-            <div className="text-center py-20 text-white/30">
-              <Icon name="SearchX" size={40} className="mx-auto mb-3 opacity-40" />
-              <p>Серверы не найдены</p>
-            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {servers.map((server, i) => (
-                <ServerCard key={server.id} server={server} rank={i + 1} onVoted={handleVoted} />
-              ))}
-            </div>
+            <>
+              {servers.length === 0 && (
+                <div className="flex items-center gap-3 mb-4 px-4 py-3 rounded-xl bg-white/3 border border-white/8 text-xs text-white/35">
+                  <Icon name="Info" size={14} className="flex-shrink-0" />
+                  Реальных серверов пока нет — показываем примеры. Добавь свой!
+                </div>
+              )}
+              <div className="flex flex-col gap-3">
+                {(servers.length > 0 ? servers : DEMO_SERVERS).map((server, i) => (
+                  <ServerCard key={server.id} server={server} rank={i + 1} onVoted={handleVoted} />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </section>
