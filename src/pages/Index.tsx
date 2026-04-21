@@ -7,7 +7,7 @@ const API = "https://functions.poehali.dev/09b533d2-c1db-4000-80a6-6d371d4a4df4"
 
 // ─── Типы ─────────────────────────────────────────────────────────────────────
 
-type ServerPlan = "free" | "standard" | "vip" | "premium";
+type ServerPlan = "free" | "standard" | "vip" | "premium" | "boost_24h" | "boost_72h" | "banner_24h";
 
 interface Server {
   id: number;
@@ -586,7 +586,7 @@ function AddServerPage({ setPage }: { setPage: (p: string) => void }) {
 
 // ─── Модалка оплаты ───────────────────────────────────────────────────────────
 
-function PayModal({ plan, onClose }: { plan: typeof PLANS[number]; onClose: () => void }) {
+function PayModal({ plan, onClose }: { plan: typeof PLANS[number] & { oneTime?: boolean }; onClose: () => void }) {
   const [email, setEmail]       = useState("");
   const [serverId, setServerId] = useState("");
   const [loading, setLoading]   = useState(false);
@@ -639,7 +639,7 @@ function PayModal({ plan, onClose }: { plan: typeof PLANS[number]; onClose: () =
           <h3 className="font-display text-2xl font-bold text-white uppercase">{plan.name}</h3>
           <div className="flex items-end gap-1 mt-2">
             <span className="font-display text-4xl font-bold text-white">{plan.price}₽</span>
-            <span className="text-white/30 mb-1">/месяц</span>
+            <span className="text-white/30 mb-1">{plan.oneTime ? "единоразово" : "/месяц"}</span>
           </div>
         </div>
 
@@ -685,7 +685,7 @@ function PayModal({ plan, onClose }: { plan: typeof PLANS[number]; onClose: () =
 // ─── Страница: Тарифы ─────────────────────────────────────────────────────────
 
 function PricingPage({ setPage }: { setPage: (p: string) => void }) {
-  const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[number] | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<(typeof PLANS[number] & { oneTime?: boolean }) | null>(null);
 
   return (
     <div className="min-h-screen pt-28 pb-16 px-5">
@@ -734,6 +734,61 @@ function PricingPage({ setPage }: { setPage: (p: string) => void }) {
               </button>
             </div>
           ))}
+        </div>
+
+        {/* Разовые услуги */}
+        <div className="mb-10">
+          <div className="text-center mb-6">
+            <div className="text-white/30 text-xs font-mono uppercase tracking-widest">// Разовые услуги — без подписки</div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              {
+                icon: "TrendingUp", color: "#22c55e",
+                name: "Поднять в топ",
+                price: "49₽",
+                desc: "Сервер поднимается на первые позиции каталога на 24 часа",
+                cta: "Поднять сейчас",
+                key: "boost_24h",
+              },
+              {
+                icon: "Zap", color: "#f59e0b",
+                name: "Суперподнятие",
+                price: "99₽",
+                desc: "Сервер закрепляется в самом верху каталога на 72 часа",
+                cta: "Закрепить на 3 дня",
+                key: "boost_72h",
+              },
+              {
+                icon: "Megaphone", color: "#e879f9",
+                name: "Баннер на день",
+                price: "149₽",
+                desc: "Рекламный баннер твоего сервера на главной странице на 24 часа",
+                cta: "Разместить баннер",
+                key: "banner_24h",
+              },
+            ].map((item) => (
+              <div key={item.key} className="glass-card border border-white/8 rounded-2xl p-5 flex flex-col hover:border-white/15 transition-all">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${item.color}18`, border: `1px solid ${item.color}30` }}>
+                    <Icon name={item.icon} size={16} style={{ color: item.color }} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-white text-sm">{item.name}</div>
+                    <div className="font-display text-lg font-bold" style={{ color: item.color }}>{item.price}</div>
+                  </div>
+                </div>
+                <p className="text-xs text-white/40 leading-relaxed flex-1 mb-4">{item.desc}</p>
+                <button
+                  onClick={() => setSelectedPlan({ key: item.key as ServerPlan, name: item.name, price: item.price.replace("₽",""), color: item.color, highlight: false, features: [], cta: item.cta, oneTime: true })}
+                  className="w-full py-2.5 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 hover:scale-[1.02]"
+                  style={{ background: item.color }}>
+                  {item.cta}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Таблица сравнения */}
