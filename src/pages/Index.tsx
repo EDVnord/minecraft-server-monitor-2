@@ -1558,19 +1558,19 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
 
           {/* Код для вставки */}
           <div className="glass-card border border-white/8 rounded-2xl p-6">
-            <h3 className="text-white font-semibold mb-4 text-sm">Код для вставки</h3>
-            <div className="relative">
-              <pre className="bg-black/40 border border-white/8 rounded-xl p-4 text-xs font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
-                {embedCode}
-              </pre>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold text-sm">Код для вставки</h3>
               <button
                 onClick={copy}
-                className={`absolute top-3 right-3 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex-shrink-0 ${
                   copied ? "bg-green-500 text-black" : "bg-white/10 text-white/60 hover:bg-white/15"
                 }`}>
-                {copied ? "Скопировано!" : "Копировать"}
+                {copied ? "✓ Скопировано" : "Копировать"}
               </button>
             </div>
+            <pre className="bg-black/40 border border-white/8 rounded-xl p-4 text-xs font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+              {embedCode}
+            </pre>
             <p className="text-[11px] text-white/25 mt-3">Вставь этот тег в HTML-код своего сайта там, где хочешь видеть виджет</p>
           </div>
 
