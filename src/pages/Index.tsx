@@ -276,9 +276,21 @@ function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; o
     } finally { setVoting(false); }
   };
 
-  const handleCopy = (e: React.MouseEvent) => {
+  const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(server.ip).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+    try {
+      await navigator.clipboard.writeText(server.ip);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = server.ip;
+      ta.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (
@@ -288,7 +300,10 @@ function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; o
       : "glass-card hover:border-white/14"
     }`}>
 
-      {/* Левая часть — номер + голоса */}
+      {/* Цветная полоска слева по тарифу */}
+      <div className="w-1 flex-shrink-0 self-stretch" style={{ background: server.banner_color.includes("gradient") ? server.banner_color : server.banner_color }} />
+
+      {/* Номер + голоса */}
       <div className="flex sm:flex-col items-center justify-between sm:justify-start gap-3 sm:gap-0 px-4 py-3 sm:py-4 sm:w-16 bg-white/2 border-b sm:border-b-0 sm:border-r border-white/5 flex-shrink-0">
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold font-display flex-shrink-0 ${
           rank === 1 ? "bg-amber-500 text-black"
@@ -302,7 +317,7 @@ function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; o
           className={`flex flex-col items-center gap-0.5 mt-auto transition-all ${
             alreadyVoted ? "text-amber-400 cursor-default"
             : isDemo     ? "text-white/20 cursor-default"
-            : "text-white/35 hover:text-green-400"
+            : "text-white/35 hover:text-green-400 active:scale-90"
           }`}
         >
           {voting
@@ -312,29 +327,22 @@ function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; o
         </button>
       </div>
 
-      {/* Баннер */}
-      <div className="sm:w-52 h-24 sm:h-auto flex-shrink-0 relative overflow-hidden"
-        style={{ background: server.banner_color }}>
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/30" />
-        {badge.label && (
-          <div className={`absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold rounded-full ${badge.cls}`}>
-            {badge.label}
-          </div>
-        )}
-        {isNew && (
-          <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-green-500 text-black text-[10px] font-bold rounded-full uppercase tracking-wide">
-            Новый
-          </div>
-        )}
-      </div>
-
       {/* Основная информация */}
       <div className="flex-1 min-w-0 px-4 py-3 flex flex-col justify-center gap-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="font-display text-sm font-bold text-white uppercase tracking-wide leading-tight group-hover:text-green-300 transition-colors line-clamp-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="font-display text-sm font-bold text-white uppercase tracking-wide leading-tight group-hover:text-green-300 transition-colors">
             {server.name}
           </h3>
-          {isNew && <span className="hidden"/>}
+          {badge.label && (
+            <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${badge.cls}`}>
+              {badge.label}
+            </span>
+          )}
+          {isNew && (
+            <span className="px-2 py-0.5 bg-green-500 text-black text-[10px] font-bold rounded-full uppercase tracking-wide">
+              Новый
+            </span>
+          )}
         </div>
         <p className="text-xs text-white/40 line-clamp-1">{server.description}</p>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
@@ -348,7 +356,7 @@ function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; o
       <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 px-4 py-3 sm:py-4 sm:w-48 border-t sm:border-t-0 sm:border-l border-white/5 flex-shrink-0">
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/4 border border-white/8 hover:bg-white/8 transition-all group/ip w-full justify-center"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/4 border border-white/8 hover:bg-white/8 transition-all w-full justify-center"
         >
           <Icon name={copied ? "Check" : "Copy"} size={12} className={copied ? "text-green-400" : "text-white/40"} />
           <span className="text-xs font-mono text-white/55 truncate max-w-[120px]">{server.ip}</span>
@@ -498,14 +506,6 @@ function HomePage({ setPage }: { setPage: (p: string) => void }) {
       <section className="relative pt-28 pb-14 px-5 grid-bg overflow-hidden">
         <div className="absolute top-20 left-1/3 w-80 h-80 bg-green-500/7 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Тикер */}
-        <div className="absolute top-[72px] left-0 right-0 overflow-hidden py-1.5 border-y border-green-500/10 bg-green-500/3">
-          <div className="flex animate-ticker whitespace-nowrap">
-            {[...TICKER, ...TICKER].map((t, i) => (
-              <span key={i} className="text-[11px] text-green-400/60 mx-8 font-mono">{t}</span>
-            ))}
-          </div>
-        </div>
 
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 neon-border text-green-400 text-xs font-semibold mb-6 slide-up">
@@ -1651,6 +1651,140 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
   );
 }
 
+// ─── Support Page ──────────────────────────────────────────────────────────────
+
+const FAQ_ITEMS = [
+  { q: "Как добавить сервер в каталог?", a: "Нажми «Добавить сервер» в меню, заполни форму с названием, IP, версией и описанием. Сервер появится мгновенно без модерации." },
+  { q: "Как работает голосование?", a: "Каждый игрок может проголосовать за сервер раз в 24 часа. Голоса влияют на позицию в рейтинге. Чем больше голосов — тем выше сервер." },
+  { q: "Как купить тариф и привязать к серверу?", a: "На странице «Продвижение» выбери тариф, нажми кнопку оплаты, введи email и ID своего сервера. После оплаты тариф активируется автоматически." },
+  { q: "Где найти ID своего сервера?", a: "ID отображается в личном кабинете в разделе «Мои серверы». Войди через email-код, открой кабинет и скопируй ID нужного сервера." },
+  { q: "Что такое виджет и как его установить?", a: "Виджет — это живой блок с онлайном и кнопкой подключения для твоего сайта. Купи виджет в разделе «Продвижение», получи строку кода и вставь её в HTML своего сайта." },
+  { q: "Как отменить или изменить тариф?", a: "Напишите нам на admin@mineed.ru с темой «Изменение тарифа». Мы поможем в течение 24 часов." },
+  { q: "Не работает голосование — что делать?", a: "Голосовать можно раз в 24 часа с одного IP. Если прошло больше суток, а голосование всё равно не работает — напишите нам с указанием вашего IP и ID сервера." },
+  { q: "Можно ли вернуть деньги?", a: "Возврат возможен в течение 24 часов с момента оплаты при условии, что тариф не был активирован. Напишите на admin@mineed.ru." },
+];
+
+function SupportPage({ setPage }: { setPage: (p: string) => void }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [sent, setSent]   = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.email.trim() || !form.message.trim()) return;
+    setSending(true);
+    await new Promise(r => setTimeout(r, 800));
+    setSent(true);
+    setSending(false);
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto px-5 py-12">
+      <button type="button" onClick={() => setPage("home")} className="text-xs text-white/40 hover:text-white/80 mb-8 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/8 hover:border-white/15">
+        ← Назад
+      </button>
+
+      <div className="text-center mb-10">
+        <div className="text-green-400 text-xs font-mono uppercase tracking-widest mb-3">// Помощь</div>
+        <h1 className="font-display text-4xl font-bold text-white uppercase tracking-wide mb-3">Поддержка</h1>
+        <p className="text-white/40 text-sm">Ответим в течение 24 часов · <a href="mailto:admin@mineed.ru" className="text-green-400 hover:text-green-300 transition-colors">admin@mineed.ru</a></p>
+      </div>
+
+      {/* FAQ */}
+      <div className="mb-10">
+        <h2 className="text-white font-semibold text-sm mb-4 uppercase tracking-wider font-display">Частые вопросы</h2>
+        <div className="space-y-2">
+          {FAQ_ITEMS.map((item, i) => (
+            <div key={i} className="glass-card border border-white/8 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpenIndex(openIndex === i ? null : i)}
+                className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/3 transition-colors"
+              >
+                <span className="text-sm text-white/80 font-medium pr-4">{item.q}</span>
+                <Icon
+                  name={openIndex === i ? "ChevronUp" : "ChevronDown"}
+                  size={16}
+                  className="text-white/30 flex-shrink-0"
+                />
+              </button>
+              {openIndex === i && (
+                <div className="px-5 pb-4 text-sm text-white/50 leading-relaxed border-t border-white/5 pt-3">
+                  {item.a}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Форма обратной связи */}
+      <div className="glass-card border border-white/8 rounded-2xl p-6">
+        <h2 className="text-white font-semibold text-sm mb-1 uppercase tracking-wider font-display">Написать нам</h2>
+        <p className="text-white/30 text-xs mb-5">Если не нашли ответ выше — опишите проблему</p>
+
+        {sent ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center">
+              <Icon name="Check" size={22} className="text-green-400" />
+            </div>
+            <p className="text-white font-semibold">Сообщение отправлено!</p>
+            <p className="text-white/40 text-xs">Ответим на {form.email} в течение 24 часов</p>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-1.5 block">Имя</label>
+                <input
+                  type="text"
+                  placeholder="Как вас зовут"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-green-500/45 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-1.5 block">Email *</label>
+                <input
+                  type="email"
+                  placeholder="your@email.ru"
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  required
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-green-500/45 transition-colors"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-1.5 block">Сообщение *</label>
+              <textarea
+                placeholder="Опишите проблему подробно..."
+                value={form.message}
+                onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+                required
+                rows={4}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-green-500/45 transition-colors resize-none"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={sending}
+              className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2 bg-green-500"
+            >
+              {sending
+                ? <><div className="w-4 h-4 rounded-full border-2 border-black/30 border-t-black animate-spin" /> Отправляем...</>
+                : <><Icon name="Send" size={15} /> Отправить</>
+              }
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Oferta Page ───────────────────────────────────────────────────────────────
 
 function OfertaPage({ setPage }: { setPage: (p: string) => void }) {
@@ -1784,7 +1918,7 @@ function Footer({ setPage }: { setPage: (p: string) => void }) {
           <button onClick={() => setPage("pricing")} className="hover:text-white/50 transition-colors">Тарифы</button>
           <button onClick={() => setPage("oferta")}   className="hover:text-white/50 transition-colors">Оферта</button>
           <button onClick={() => setPage("contacts")} className="hover:text-white/50 transition-colors">Реквизиты</button>
-          <span>Поддержка</span>
+          <button onClick={() => setPage("support")} className="hover:text-white/50 transition-colors">Поддержка</button>
         </div>
         <div className="text-xs text-white/18">© 2026 MineED.ru</div>
       </div>
@@ -1818,6 +1952,7 @@ function AppInner() {
       {page === "oferta"       && <OfertaPage     setPage={navigate} />}
       {page === "contacts"     && <ContactsPage   setPage={navigate} />}
       {page === "widget-demo"  && <WidgetDemoPage setPage={navigate} />}
+      {page === "support"      && <SupportPage    setPage={navigate} />}
       <Footer setPage={navigate} />
     </div>
   );
