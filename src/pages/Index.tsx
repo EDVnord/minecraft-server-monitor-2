@@ -171,28 +171,28 @@ const PLANS = [
     key: "free" as ServerPlan,
     name: "Бесплатно", price: "0",
     color: "#64748b", highlight: false,
-    features: ["Размещение в каталоге", "Стандартная позиция", "Базовая статистика"],
+    features: ["Размещение в каталоге", "Голосование игроков", "Базовая статистика", "Бесплатный виджет (со ссылкой)"],
     cta: "Разместить бесплатно",
   },
   {
     key: "standard" as ServerPlan,
-    name: "Старт", price: "99",
+    name: "Старт", price: "49",
     color: "#22c55e", highlight: false,
-    features: ["Всё из Бесплатного", "Приоритет в поиске", "Цветной баннер карточки", "Значок «Старт» в списке", "Расширенная статистика", "Виджет онлайна для сайта"],
-    cta: "Подключить за 99 ₽",
+    features: ["Всё из Бесплатного", "Приоритет в поиске", "Значок ⭐ в списке", "Виджет Pro (без ссылки)", "Голоса ×1.5", "Статистика переходов"],
+    cta: "Подключить за 49 ₽/мес",
   },
   {
     key: "vip" as ServerPlan,
-    name: "VIP", price: "299",
+    name: "VIP", price: "149",
     color: "#f59e0b", highlight: true,
-    features: ["Всё из Старта", "Значок 👑 VIP на карточке", "Топ-10 в категории", "Выделение цветом в списке", "Бонусные голоса ×2", "Закреп в ленте на 7 дней", "Кастомный виджет с цветами сервера"],
+    features: ["Всё из Старта", "Значок 👑 VIP на карточке", "Топ-10 в категории", "Выделение в списке", "Голоса ×2", "Закреп 7 дней в ленте"],
     cta: "Стать VIP",
   },
   {
     key: "premium" as ServerPlan,
-    name: "Premium", price: "599",
+    name: "Premium", price: "349",
     color: "#e879f9", highlight: false,
-    features: ["Всё из VIP", "Место в Топ-3 на главной", "Баннер на главной странице", "Бонусные голоса ×3", "Значок 💎 Premium", "Закреп на 30 дней", "Виджет с анимацией и брендингом"],
+    features: ["Всё из VIP", "Топ-3 на главной странице", "Баннер на главной", "Голоса ×3", "Значок 💎 Premium", "Закреп 30 дней"],
     cta: "Получить Premium",
   },
 ];
@@ -507,13 +507,15 @@ function HomePage({ setPage }: { setPage: (p: string) => void }) {
 
   const PLAN_WEIGHT: Record<string, number> = { premium: 0, vip: 1, standard: 2, free: 3 };
 
-  const sortedServers = [...(servers.length > 0 ? servers : DEMO_SERVERS)].sort((a, b) => {
-    const pw = (PLAN_WEIGHT[a.plan] ?? 3) - (PLAN_WEIGHT[b.plan] ?? 3);
-    if (pw !== 0) return pw;
-    if (sort === "votes")  return b.votes - a.votes;
-    if (sort === "online") return b.online - a.online;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  const sortedServers = [...(servers.length > 0 ? servers : DEMO_SERVERS)]
+    .filter(s => activeType === "Все" || s.type === activeType)
+    .sort((a, b) => {
+      const pw = (PLAN_WEIGHT[a.plan] ?? 3) - (PLAN_WEIGHT[b.plan] ?? 3);
+      if (pw !== 0) return pw;
+      if (sort === "votes")  return b.votes - a.votes;
+      if (sort === "online") return b.online - a.online;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
   const totalOnline = (servers.length > 0 ? servers : DEMO_SERVERS).reduce((a, s) => a + s.online, 0);
 
@@ -1051,13 +1053,14 @@ function PricingPage({ setPage }: { setPage: (p: string) => void }) {
               </thead>
               <tbody className="divide-y divide-white/4">
                 {[
-                  ["Размещение в каталоге",  true,   true,    true,    true  ],
-                  ["Цветной баннер карточки",false,  true,    true,    true  ],
-                  ["Приоритет в поиске",     false,  true,    true,    true  ],
-                  ["Позиция в топе",     "Случайная","Топ-50","Топ-10","Топ-3"],
-                  ["Закреп в ленте",         false,  false,  "7 дней","30 дней"],
-                  ["Бонус голосов",          "×1",   "×1",   "×2",    "×3"  ],
-                  ["Баннер на главной",      false,  false,   false,   true  ],
+                  ["Размещение в каталоге",  true,      true,      true,      true      ],
+                  ["Виджет для сайта",       "Бесплат", "Pro",     "Pro",     "Pro"     ],
+                  ["Приоритет в поиске",     false,     true,      true,      true      ],
+                  ["Позиция в топе",         "Общая",   "Топ-50",  "Топ-10",  "Топ-3"  ],
+                  ["Закреп в ленте",         false,     false,     "7 дней",  "30 дней" ],
+                  ["Бонус голосов",          "×1",      "×1.5",    "×2",      "×3"     ],
+                  ["Баннер на главной",      false,     false,     false,     true      ],
+                  ["Статистика переходов",   false,     true,      true,      true      ],
                 ].map((row, i) => (
                   <tr key={i} className="hover:bg-white/2 transition-colors">
                     <td className="px-6 py-3 text-white/50 text-xs">{row[0]}</td>
@@ -1483,7 +1486,8 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
   const [compact, setCompact]   = useState(false);
   const [isPro, setIsPro]       = useState(false);
 
-  const embedCode = `<script src="https://mineed.ru/widget.js" data-server="${serverId}"${isPro ? ` data-theme="${theme.id}"` : ''}${compact ? ' data-compact="true"' : ''}${isPro ? ' data-pro="true"' : ''}></script>`;
+  const scriptClose = "<" + "/script>";
+  const embedCode = `<script src="https://mineed.ru/widget.js" data-server="${serverId}"${isPro ? ` data-theme="${theme.id}"` : ""}${compact ? ` data-compact="true"` : ""}${isPro ? ` data-pro="true"` : ""}>${scriptClose}`;
 
   const copy = async () => {
     try {
@@ -1503,7 +1507,7 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-5 py-12">
+    <div className="relative z-10 max-w-4xl mx-auto px-5 py-12">
       <button type="button" onClick={() => setPage("pricing")} className="text-xs text-white/40 hover:text-white/80 mb-8 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/8 hover:border-white/15">
         ← Назад к тарифам
       </button>
@@ -1631,50 +1635,58 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
             {/* Виджет-карточка */}
             <div
               className="rounded-2xl overflow-hidden"
-              style={{ background: theme.bg, border: `1px solid ${theme.border}` }}>
-              <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: theme.border }}>
+              style={{ background: isPro ? theme.bg : "#0f1117", border: `1px solid ${isPro ? theme.border : "rgba(255,255,255,0.08)"}` }}>
+              <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: isPro ? theme.border : "rgba(255,255,255,0.06)" }}>
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-xs font-mono" style={{ color: theme.text + "80" }}>mineed.ru</span>
+                  {!isPro && (
+                    <a href="https://mineed.ru" className="text-[11px] font-semibold opacity-50 no-underline" style={{ color: "rgba(255,255,255,0.5)" }}>
+                      Mine<span style={{ color: "#22c55e" }}>ED</span>
+                    </a>
+                  )}
+                  {isPro && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />}
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: theme.accent, background: theme.accent + "18", border: `1px solid ${theme.accent}30` }}>ONLINE</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: isPro ? theme.accent : "#22c55e", background: isPro ? theme.accent + "18" : "#22c55e18", border: `1px solid ${isPro ? theme.accent + "30" : "#22c55e30"}` }}>ONLINE</span>
               </div>
               <div className="px-5 py-4">
-                <div className="text-[11px] uppercase tracking-widest mb-1" style={{ color: theme.text + "50" }}>Minecraft сервер</div>
-                <div className="font-bold text-lg mb-4" style={{ color: theme.text }}>CraftRealm SMP</div>
+                <div className="text-[11px] uppercase tracking-widest mb-1" style={{ color: isPro ? theme.text + "50" : "rgba(255,255,255,0.3)" }}>Minecraft сервер</div>
+                <div className="font-bold text-lg mb-4" style={{ color: isPro ? theme.text : "#fff" }}>CraftRealm SMP</div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs" style={{ color: theme.text + "60" }}>Онлайн игроков</span>
-                  <span className="text-xs font-mono font-bold" style={{ color: theme.accent }}>847 / 1200</span>
+                  <span className="text-xs" style={{ color: isPro ? theme.text + "60" : "rgba(255,255,255,0.4)" }}>Онлайн игроков</span>
+                  <span className="text-xs font-mono font-bold" style={{ color: isPro ? theme.accent : "#22c55e" }}>847 / 1200</span>
                 </div>
-                <div className="w-full h-1.5 rounded-full mb-4" style={{ background: theme.accent + "20" }}>
-                  <div className="h-full rounded-full" style={{ width: "70%", background: theme.accent }} />
+                <div className="w-full h-1.5 rounded-full mb-4" style={{ background: isPro ? theme.accent + "20" : "#22c55e20" }}>
+                  <div className="h-full rounded-full" style={{ width: "70%", background: isPro ? theme.accent : "#22c55e" }} />
                 </div>
-                <div className="flex items-center justify-between mb-4 text-xs" style={{ color: theme.text + "40" }}>
+                <div className="flex items-center justify-between mb-4 text-xs" style={{ color: isPro ? theme.text + "40" : "rgba(255,255,255,0.25)" }}>
                   <span>play.craftrealsm.ru</span>
                   <span>uptime 99.8%</span>
                 </div>
                 <button
-                  className="w-full py-2.5 rounded-xl text-sm font-bold transition-all hover:opacity-90"
-                  style={{ background: theme.accent, color: theme.id === "minimal" ? "#18181b" : "#000" }}>
+                  className="w-full py-2.5 rounded-xl text-sm font-bold"
+                  style={{ background: isPro ? theme.accent : "#22c55e", color: "#000" }}>
                   Подключиться
                 </button>
               </div>
             </div>
 
-            {/* Компактный виджет */}
-            <div
-              className="rounded-xl overflow-hidden"
-              style={{ background: theme.bg, border: `1px solid ${theme.border}` }}>
-              <div className="px-4 py-3 flex items-center gap-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" style={{ boxShadow: "0 0 6px #22c55e" }} />
-                <span className="text-sm font-semibold flex-1" style={{ color: theme.text }}>CraftRealm SMP</span>
-                <span className="text-xs font-mono font-bold" style={{ color: theme.accent }}>847 онлайн</span>
-                <button className="px-3 py-1 rounded-lg text-xs font-bold ml-1" style={{ background: theme.accent, color: "#000" }}>
-                  Войти
-                </button>
+            {/* Компактный */}
+            {compact && (
+              <div className="rounded-xl overflow-hidden" style={{ background: isPro ? theme.bg : "#0f1117", border: `1px solid ${isPro ? theme.border : "rgba(255,255,255,0.08)"}` }}>
+                <div className="px-4 py-3 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" style={{ boxShadow: "0 0 6px #22c55e" }} />
+                  <span className="text-sm font-semibold flex-1" style={{ color: isPro ? theme.text : "#fff" }}>CraftRealm SMP</span>
+                  <span className="text-xs font-mono font-bold" style={{ color: isPro ? theme.accent : "#22c55e" }}>847 онлайн</span>
+                  {!isPro && <span className="text-[10px] opacity-40" style={{ color: "rgba(255,255,255,0.4)" }}>mineed.ru</span>}
+                  <button className="px-3 py-1 rounded-lg text-xs font-bold ml-1" style={{ background: isPro ? theme.accent : "#22c55e", color: "#000" }}>
+                    Войти
+                  </button>
+                </div>
               </div>
+            )}
+
+            <div className="text-[11px] text-white/25 text-center">
+              {isPro ? "Pro: без ссылки, твои цвета" : "Бесплатно: ссылка «MineED» в шапке"}
             </div>
-            <p className="text-[11px] text-white/25 text-center">Полная карточка и компактная строка — оба варианта доступны</p>
           </div>
         </div>
       </div>
@@ -1711,7 +1723,7 @@ function SupportPage({ setPage }: { setPage: (p: string) => void }) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-5 py-12">
+    <div className="relative z-10 max-w-3xl mx-auto px-5 py-12">
       <button type="button" onClick={() => setPage("home")} className="text-xs text-white/40 hover:text-white/80 mb-8 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/8 hover:border-white/15">
         ← Назад
       </button>
@@ -1820,7 +1832,7 @@ function SupportPage({ setPage }: { setPage: (p: string) => void }) {
 
 function OfertaPage({ setPage }: { setPage: (p: string) => void }) {
   return (
-    <div className="max-w-3xl mx-auto px-5 py-12 text-white/80">
+    <div className="relative z-10 max-w-3xl mx-auto px-5 py-12 text-white/80">
       <button type="button" onClick={() => setPage("home")} className="text-xs text-white/40 hover:text-white/80 mb-8 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/8 hover:border-white/15">
         ← Назад
       </button>
@@ -1872,7 +1884,7 @@ function OfertaPage({ setPage }: { setPage: (p: string) => void }) {
 
 function ContactsPage({ setPage }: { setPage: (p: string) => void }) {
   return (
-    <div className="max-w-2xl mx-auto px-5 py-12 text-white/80">
+    <div className="relative z-10 max-w-2xl mx-auto px-5 py-12 text-white/80">
       <button type="button" onClick={() => setPage("home")} className="text-xs text-white/40 hover:text-white/80 mb-8 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/8 hover:border-white/15">
         ← Назад
       </button>

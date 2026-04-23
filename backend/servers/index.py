@@ -33,15 +33,23 @@ CORS = {
 YOOKASSA_API = "https://api.yookassa.ru/v3"
 
 PLAN_PRICES = {
-    "standard": "499.00",
-    "vip":      "1299.00",
-    "premium":  "2999.00",
+    "standard": "49.00",
+    "vip":      "149.00",
+    "premium":  "349.00",
+    "widget":   "149.00",
+    "boost_24h": "49.00",
+    "boost_72h": "99.00",
+    "banner_24h": "149.00",
 }
 
 PLAN_NAMES = {
-    "standard": "Тариф Стандарт — продвижение сервера MineTop",
-    "vip":      "Тариф VIP — продвижение сервера MineTop",
-    "premium":  "Тариф Premium — продвижение сервера MineTop",
+    "standard":   "Тариф Старт — продвижение сервера MineED",
+    "vip":        "Тариф VIP — продвижение сервера MineED",
+    "premium":    "Тариф Premium — продвижение сервера MineED",
+    "widget":     "Виджет Pro — MineED",
+    "boost_24h":  "Поднятие в топ на 24ч — MineED",
+    "boost_72h":  "Суперподнятие на 72ч — MineED",
+    "banner_24h": "Баннер на день — MineED",
 }
 
 BANNER_COLORS = [
@@ -309,6 +317,8 @@ def handler(event: dict, context) -> dict:
                     s = dict(zip(cols, row))
                     s["uptime"] = float(s["uptime"])
                     s["online_status"] = "online" if s["online"] > 0 else "offline"
+                    # Pro-виджет доступен только для платных тарифов (standard, vip, premium)
+                    s["widget_pro"] = s["plan"] in ("standard", "vip", "premium")
                     return {"statusCode": 200, "headers": CORS, "body": json.dumps({"server": s})}
 
                 # ── GET / — список серверов ───────────────────────────────

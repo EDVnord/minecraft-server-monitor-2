@@ -379,7 +379,9 @@
         if (xhr.status === 200) {
           try {
             var data = JSON.parse(xhr.responseText);
-            renderWidget(container, data, theme, compact, isPro);
+            // Pro только если и клиент запросил, и бэкенд подтвердил платный тариф
+            var actualPro = isPro && data.server && data.server.widget_pro === true;
+            renderWidget(container, data, theme, compact, actualPro);
           } catch (e) {
             renderError(container, "ошибка парсинга данных");
           }
