@@ -125,7 +125,7 @@ function LoginModal({ onClose }: { onClose: () => void }) {
 
 // ─── Типы ─────────────────────────────────────────────────────────────────────
 
-type ServerPlan = "free" | "standard" | "vip" | "premium" | "boost_24h" | "boost_72h" | "banner_24h";
+type ServerPlan = "free" | "standard" | "vip" | "premium" | "boost_24h" | "boost_72h" | "banner_24h" | "widget";
 
 interface Server {
   id: number;
@@ -148,9 +148,10 @@ interface Server {
 // ─── Константы ────────────────────────────────────────────────────────────────
 
 const NAV = [
-  { id: "home",    label: "Каталог" },
-  { id: "add",     label: "Добавить сервер" },
-  { id: "pricing", label: "Продвижение" },
+  { id: "home",        label: "Каталог" },
+  { id: "add",         label: "Добавить сервер" },
+  { id: "pricing",     label: "Продвижение" },
+  { id: "widget-demo", label: "Виджет" },
 ];
 
 const TICKER = [
@@ -177,30 +178,34 @@ const PLANS = [
     key: "standard" as ServerPlan,
     name: "Старт", price: "99",
     color: "#22c55e", highlight: false,
-    features: ["Всё из Бесплатного", "Приоритет в поиске", "Цветной баннер карточки", "Значок «Старт» в списке", "Расширенная статистика"],
+    features: ["Всё из Бесплатного", "Приоритет в поиске", "Цветной баннер карточки", "Значок «Старт» в списке", "Расширенная статистика", "Виджет онлайна для сайта"],
     cta: "Подключить за 99 ₽",
   },
   {
     key: "vip" as ServerPlan,
     name: "VIP", price: "299",
     color: "#f59e0b", highlight: true,
-    features: ["Всё из Старта", "Значок 👑 VIP на карточке", "Топ-10 в категории", "Выделение цветом в списке", "Бонусные голоса ×2", "Закреп в ленте на 7 дней"],
+    features: ["Всё из Старта", "Значок 👑 VIP на карточке", "Топ-10 в категории", "Выделение цветом в списке", "Бонусные голоса ×2", "Закреп в ленте на 7 дней", "Кастомный виджет с цветами сервера"],
     cta: "Стать VIP",
   },
   {
     key: "premium" as ServerPlan,
     name: "Premium", price: "599",
     color: "#e879f9", highlight: false,
-    features: ["Всё из VIP", "Место в Топ-3 на главной", "Баннер на главной странице", "Бонусные голоса ×3", "Значок 💎 Premium", "Закреп на 30 дней"],
+    features: ["Всё из VIP", "Место в Топ-3 на главной", "Баннер на главной странице", "Бонусные голоса ×3", "Значок 💎 Premium", "Закреп на 30 дней", "Виджет с анимацией и брендингом"],
     cta: "Получить Premium",
   },
 ];
 
 const PLAN_BADGE: Record<ServerPlan, { label: string; cls: string }> = {
-  free:     { label: "",            cls: "" },
-  standard: { label: "⭐ Стандарт", cls: "text-green-400 bg-green-500/12 border border-green-500/25" },
-  vip:      { label: "👑 VIP",      cls: "text-amber-400 bg-amber-500/12 border border-amber-500/30" },
-  premium:  { label: "💎 Premium",  cls: "text-fuchsia-400 bg-fuchsia-500/12 border border-fuchsia-500/30" },
+  free:       { label: "",            cls: "" },
+  standard:   { label: "⭐ Старт",   cls: "text-green-400 bg-green-500/12 border border-green-500/25" },
+  vip:        { label: "👑 VIP",      cls: "text-amber-400 bg-amber-500/12 border border-amber-500/30" },
+  premium:    { label: "💎 Premium",  cls: "text-fuchsia-400 bg-fuchsia-500/12 border border-fuchsia-500/30" },
+  boost_24h:  { label: "",            cls: "" },
+  boost_72h:  { label: "",            cls: "" },
+  banner_24h: { label: "",            cls: "" },
+  widget:     { label: "🔲 Виджет",   cls: "text-cyan-400 bg-cyan-500/12 border border-cyan-500/25" },
 };
 
 // ─── Вспомогательные компоненты ───────────────────────────────────────────────
@@ -911,6 +916,70 @@ function PricingPage({ setPage }: { setPage: (p: string) => void }) {
           <div className="text-center mb-6">
             <div className="text-white/30 text-xs font-mono uppercase tracking-widest">// Разовые услуги — без подписки</div>
           </div>
+
+          {/* Виджет — большой блок */}
+          <div className="glass-card border border-cyan-500/20 rounded-2xl p-6 mb-4 hover:border-cyan-500/35 transition-all bg-cyan-500/3">
+            <div className="flex flex-col sm:flex-row gap-6 items-start">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: "#06b6d418", border: "1px solid #06b6d430" }}>
+                    <Icon name="LayoutDashboard" size={18} style={{ color: "#06b6d4" }} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-white text-sm">Живой виджет для вашего сайта</div>
+                    <div className="text-xs text-white/40">Разовая покупка · навсегда</div>
+                  </div>
+                  <div className="ml-auto font-display text-2xl font-bold" style={{ color: "#06b6d4" }}>149₽</div>
+                </div>
+                <p className="text-xs text-white/50 leading-relaxed mb-4">
+                  Вставьте одну строку кода на сайт сервера — и посетители увидят онлайн игроков, статус и кнопку «Подключиться» в реальном времени. Автоматически обновляется каждые 60 секунд. В отличие от статичной картинки ip-games — это живой интерактивный блок.
+                </p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {["Онлайн в реальном времени", "Кнопка «Подключиться»", "Авто-обновление", "5 тем оформления", "Вставка 1 строкой кода"].map(f => (
+                    <span key={f} className="text-[11px] px-2.5 py-1 rounded-full text-cyan-400 bg-cyan-500/10 border border-cyan-500/20">{f}</span>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setSelectedPlan({ key: "widget" as ServerPlan, name: "Виджет для сайта", price: "149", color: "#06b6d4", highlight: false, features: [], cta: "Купить виджет — 149₽", oneTime: true })}
+                    className="py-2.5 px-6 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 hover:scale-[1.02]"
+                    style={{ background: "#06b6d4" }}>
+                    Купить виджет — 149₽
+                  </button>
+                  <button
+                    onClick={() => setPage("widget-demo")}
+                    className="py-2.5 px-5 rounded-xl text-sm font-semibold text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/8 transition-all">
+                    Посмотреть демо →
+                  </button>
+                </div>
+              </div>
+              {/* превью виджета */}
+              <div className="w-full sm:w-64 flex-shrink-0">
+                <div className="rounded-xl overflow-hidden border border-white/10 bg-[#0f1117]">
+                  <div className="px-4 py-3 flex items-center gap-2 border-b border-white/5">
+                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                    <span className="text-xs text-white/60 font-mono">mineed.ru/widget</span>
+                  </div>
+                  <div className="p-4">
+                    <div className="text-[11px] text-white/30 uppercase tracking-widest mb-1">Ваш сервер</div>
+                    <div className="text-white font-bold text-sm mb-3">CraftRealm SMP</div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ boxShadow: "0 0 6px #22c55e" }} />
+                        <span className="text-xs text-white/70"><span className="text-white font-semibold">847</span>/1200</span>
+                      </div>
+                      <span className="text-[11px] text-white/30">uptime 99.8%</span>
+                    </div>
+                    <div className="w-full py-2 rounded-lg text-xs font-bold text-black text-center" style={{ background: "#22c55e" }}>
+                      Подключиться
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               {
@@ -1393,6 +1462,166 @@ function CabinetPage({ setPage }: { setPage: (p: string) => void }) {
   );
 }
 
+// ─── Widget Demo Page ──────────────────────────────────────────────────────────
+
+const WIDGET_THEMES = [
+  { id: "dark",    label: "Тёмная",   bg: "#0f1117", border: "#ffffff15", accent: "#22c55e", text: "#fff" },
+  { id: "glass",   label: "Стекло",   bg: "rgba(255,255,255,0.05)", border: "#ffffff25", accent: "#06b6d4", text: "#fff" },
+  { id: "green",   label: "Зелёная",  bg: "#052e16", border: "#22c55e40", accent: "#22c55e", text: "#fff" },
+  { id: "purple",  label: "Фиолет",   bg: "#1e0a2e", border: "#a855f740", accent: "#a855f7", text: "#fff" },
+  { id: "minimal", label: "Минимал",  bg: "#18181b", border: "#3f3f46",   accent: "#fff",    text: "#a1a1aa" },
+];
+
+function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
+  const [theme, setTheme] = useState(WIDGET_THEMES[0]);
+  const [serverId, setServerId] = useState("12345");
+  const [copied, setCopied]     = useState(false);
+
+  const API_BASE = typeof window !== "undefined"
+    ? `${window.location.origin}`
+    : "https://mineed.ru";
+
+  const embedCode = `<script src="${API_BASE}/widget.js" data-server="${serverId}" data-theme="${theme.id}"></script>`;
+
+  const copy = () => {
+    navigator.clipboard.writeText(embedCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto px-5 py-12">
+      <button onClick={() => setPage("pricing")} className="text-xs text-white/30 hover:text-white/60 mb-8 flex items-center gap-1 transition-colors">
+        ← Назад к тарифам
+      </button>
+
+      <div className="text-center mb-10">
+        <div className="text-cyan-400 text-xs font-mono uppercase tracking-widest mb-3">// Виджет</div>
+        <h1 className="font-display text-4xl font-bold text-white uppercase tracking-wide mb-3">Живой виджет</h1>
+        <p className="text-white/40 text-sm max-w-lg mx-auto">Один тег — и на вашем сайте появится живой блок с онлайном, статусом и кнопкой подключения. Обновляется каждые 60 секунд.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        {/* Настройки */}
+        <div className="space-y-6">
+          <div className="glass-card border border-white/8 rounded-2xl p-6">
+            <h3 className="text-white font-semibold mb-4 text-sm">Настройка</h3>
+
+            <div className="mb-5">
+              <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-2 block">ID сервера</label>
+              <input
+                type="text"
+                value={serverId}
+                onChange={e => setServerId(e.target.value)}
+                placeholder="Введи ID своего сервера"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 text-sm focus:outline-none focus:border-cyan-500/45 transition-colors font-mono"
+              />
+              <p className="text-[11px] text-white/25 mt-1">Найди ID в личном кабинете после добавления сервера</p>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-3 block">Тема оформления</label>
+              <div className="flex flex-wrap gap-2">
+                {WIDGET_THEMES.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTheme(t)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      theme.id === t.id
+                        ? "border-cyan-400 text-cyan-400 bg-cyan-500/10"
+                        : "border-white/10 text-white/40 hover:border-white/25 hover:text-white/60"
+                    }`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Код для вставки */}
+          <div className="glass-card border border-white/8 rounded-2xl p-6">
+            <h3 className="text-white font-semibold mb-4 text-sm">Код для вставки</h3>
+            <div className="relative">
+              <pre className="bg-black/40 border border-white/8 rounded-xl p-4 text-xs font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+                {embedCode}
+              </pre>
+              <button
+                onClick={copy}
+                className={`absolute top-3 right-3 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  copied ? "bg-green-500 text-black" : "bg-white/10 text-white/60 hover:bg-white/15"
+                }`}>
+                {copied ? "Скопировано!" : "Копировать"}
+              </button>
+            </div>
+            <p className="text-[11px] text-white/25 mt-3">Вставь этот тег в HTML-код своего сайта там, где хочешь видеть виджет</p>
+          </div>
+
+          <button
+            onClick={() => setPage("pricing")}
+            className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90"
+            style={{ background: "#06b6d4" }}>
+            Купить виджет — 149₽
+          </button>
+        </div>
+
+        {/* Превью */}
+        <div>
+          <div className="text-xs text-white/30 uppercase tracking-widest font-mono mb-4">// Предпросмотр</div>
+          <div className="space-y-4">
+            {/* Виджет-карточка */}
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{ background: theme.bg, border: `1px solid ${theme.border}` }}>
+              <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: theme.border }}>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-xs font-mono" style={{ color: theme.text + "80" }}>mineed.ru</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: theme.accent, background: theme.accent + "18", border: `1px solid ${theme.accent}30` }}>ONLINE</span>
+              </div>
+              <div className="px-5 py-4">
+                <div className="text-[11px] uppercase tracking-widest mb-1" style={{ color: theme.text + "50" }}>Minecraft сервер</div>
+                <div className="font-bold text-lg mb-4" style={{ color: theme.text }}>CraftRealm SMP</div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs" style={{ color: theme.text + "60" }}>Онлайн игроков</span>
+                  <span className="text-xs font-mono font-bold" style={{ color: theme.accent }}>847 / 1200</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full mb-4" style={{ background: theme.accent + "20" }}>
+                  <div className="h-full rounded-full" style={{ width: "70%", background: theme.accent }} />
+                </div>
+                <div className="flex items-center justify-between mb-4 text-xs" style={{ color: theme.text + "40" }}>
+                  <span>play.craftrealsm.ru</span>
+                  <span>uptime 99.8%</span>
+                </div>
+                <button
+                  className="w-full py-2.5 rounded-xl text-sm font-bold transition-all hover:opacity-90"
+                  style={{ background: theme.accent, color: theme.id === "minimal" ? "#18181b" : "#000" }}>
+                  Подключиться
+                </button>
+              </div>
+            </div>
+
+            {/* Компактный виджет */}
+            <div
+              className="rounded-xl overflow-hidden"
+              style={{ background: theme.bg, border: `1px solid ${theme.border}` }}>
+              <div className="px-4 py-3 flex items-center gap-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" style={{ boxShadow: "0 0 6px #22c55e" }} />
+                <span className="text-sm font-semibold flex-1" style={{ color: theme.text }}>CraftRealm SMP</span>
+                <span className="text-xs font-mono font-bold" style={{ color: theme.accent }}>847 онлайн</span>
+                <button className="px-3 py-1 rounded-lg text-xs font-bold ml-1" style={{ background: theme.accent, color: "#000" }}>
+                  Войти
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] text-white/25 text-center">Полная карточка и компактная строка — оба варианта доступны</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Oferta Page ───────────────────────────────────────────────────────────────
 
 function OfertaPage({ setPage }: { setPage: (p: string) => void }) {
@@ -1556,8 +1785,9 @@ function AppInner() {
       {page === "pricing"     && <PricingPage    setPage={navigate} />}
       {page === "pay-success" && <PaySuccessPage setPage={navigate} />}
       {page === "cabinet"     && <CabinetPage    setPage={navigate} />}
-      {page === "oferta"      && <OfertaPage     setPage={navigate} />}
-      {page === "contacts"    && <ContactsPage   setPage={navigate} />}
+      {page === "oferta"       && <OfertaPage     setPage={navigate} />}
+      {page === "contacts"     && <ContactsPage   setPage={navigate} />}
+      {page === "widget-demo"  && <WidgetDemoPage setPage={navigate} />}
       <Footer setPage={navigate} />
     </div>
   );

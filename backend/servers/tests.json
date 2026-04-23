@@ -24,6 +24,22 @@
       "expectedStatus": 404,
       "expectedBody": { "error": "Заказ не найден" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET /widget — без id",
+      "method": "GET",
+      "path": "/widget",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "id обязателен" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET /widget — несуществующий сервер",
+      "method": "GET",
+      "path": "/widget?id=999999",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "Сервер не найден" },
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -293,6 +293,24 @@ def handler(event: dict, context) -> dict:
                         cur.execute("UPDATE sessions SET expires_at=NOW() WHERE token=%s", (token,))
                     return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
+                # ── GET /widget — данные для виджета ─────────────────────
+                if method == "GET" and path.endswith("/widget"):
+                    server_id = (event.get("queryStringParameters") or {}).get("id")
+                    if not server_id:
+                        return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "id обязателен"})}
+                    cur.execute(
+                        "SELECT id,name,ip,plan,votes,online,max_players,uptime,banner_color FROM servers WHERE id = %s",
+                        (int(server_id),)
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Сервер не найден"})}
+                    cols = ["id","name","ip","plan","votes","online","max_players","uptime","banner_color"]
+                    s = dict(zip(cols, row))
+                    s["uptime"] = float(s["uptime"])
+                    s["online_status"] = "online" if s["online"] > 0 else "offline"
+                    return {"statusCode": 200, "headers": CORS, "body": json.dumps({"server": s})}
+
                 # ── GET / — список серверов ───────────────────────────────
                 if method == "GET" and path in ("", "/"):
                     type_filter = (event.get("queryStringParameters") or {}).get("type", "")
