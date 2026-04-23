@@ -77,7 +77,7 @@
     return el;
   }
 
-  function renderWidget(container, data, theme, compact) {
+  function renderWidget(container, data, theme, compact, isPro) {
     var t = THEMES[theme] || THEMES.dark;
     var s = data.server;
     var pct = s.max_players > 0 ? Math.round((s.online / s.max_players) * 100) : 0;
@@ -172,22 +172,23 @@
         alignItems: "center",
         gap: "6px",
       });
-      var logoLink = createElement("a", {
-        fontSize: "12px",
-        fontWeight: "700",
-        color: t.subtext,
-        textDecoration: "none",
-        letterSpacing: "0.5px",
-      }, {
-        href: "https://mineed.ru",
-        target: "_blank",
-        textContent: "Mine",
-      });
-      var logoAccent = createElement("span", {
-        color: "#22c55e",
-      }, { textContent: "ED" });
-      logoLink.appendChild(logoAccent);
-      logoWrap.appendChild(logoLink);
+      if (!isPro) {
+        var logoLink = createElement("a", {
+          fontSize: "11px",
+          fontWeight: "600",
+          color: t.subtext,
+          textDecoration: "none",
+          letterSpacing: "0.5px",
+          opacity: "0.5",
+        }, {
+          href: "https://mineed.ru",
+          target: "_blank",
+          textContent: "Mine",
+        });
+        var logoAccent = createElement("span", { color: "#22c55e" }, { textContent: "ED" });
+        logoLink.appendChild(logoAccent);
+        logoWrap.appendChild(logoLink);
+      }
 
       var statusBadge = createElement("span", {
         fontSize: "10px",
@@ -361,6 +362,7 @@
     var serverId = container.getAttribute("data-server");
     var theme    = container.getAttribute("data-theme") || "dark";
     var compact  = container.getAttribute("data-compact") === "true";
+    var isPro    = container.getAttribute("data-pro") === "true";
 
     if (!serverId) {
       renderError(container, "укажи data-server с ID сервера");
@@ -377,7 +379,7 @@
         if (xhr.status === 200) {
           try {
             var data = JSON.parse(xhr.responseText);
-            renderWidget(container, data, theme, compact);
+            renderWidget(container, data, theme, compact, isPro);
           } catch (e) {
             renderError(container, "ошибка парсинга данных");
           }

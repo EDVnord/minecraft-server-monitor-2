@@ -311,20 +311,27 @@ function ServerCard({ server, rank, onVoted }: { server: Server; rank: number; o
           : rank === 3 ? "bg-amber-700/80 text-white"
           : "bg-white/8 text-white/50"
         }`}>{rank}</div>
-        <button
-          onClick={handleVote}
-          disabled={voting || alreadyVoted || isDemo}
-          className={`flex flex-col items-center gap-0.5 mt-auto transition-all ${
-            alreadyVoted ? "text-amber-400 cursor-default"
-            : isDemo     ? "text-white/20 cursor-default"
-            : "text-white/35 hover:text-green-400 active:scale-90"
-          }`}
-        >
-          {voting
-            ? <div className="w-4 h-4 rounded-full border border-current border-t-transparent animate-spin" />
-            : <Icon name="ThumbsUp" size={14} />}
-          <span className="text-[11px] font-bold font-mono">{server.votes.toLocaleString("ru")}</span>
-        </button>
+        <div className="relative group/vote mt-auto">
+          <button
+            onClick={handleVote}
+            disabled={voting || alreadyVoted || isDemo}
+            className={`flex flex-col items-center gap-0.5 transition-all ${
+              alreadyVoted ? "text-amber-400 cursor-default"
+              : isDemo     ? "text-white/25 cursor-not-allowed"
+              : "text-white/35 hover:text-green-400 active:scale-90"
+            }`}
+          >
+            {voting
+              ? <div className="w-4 h-4 rounded-full border border-current border-t-transparent animate-spin" />
+              : <Icon name="ThumbsUp" size={14} />}
+            <span className="text-[11px] font-bold font-mono">{server.votes.toLocaleString("ru")}</span>
+          </button>
+          {isDemo && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black/90 border border-white/10 rounded-lg text-[10px] text-white/60 whitespace-nowrap opacity-0 group-hover/vote:opacity-100 transition-opacity pointer-events-none z-10">
+              Демо-сервер
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Основная информация */}
@@ -544,9 +551,9 @@ function HomePage({ setPage }: { setPage: (p: string) => void }) {
           {!loading && (
             <div className="flex justify-center gap-8 mt-7 slide-up d4">
               {[
-                { v: servers.length, label: "серверов" },
+                { v: sortedServers.length, label: "серверов" },
                 { v: totalOnline.toLocaleString("ru"), label: "онлайн" },
-                { v: servers.reduce((a, s) => a + s.votes, 0).toLocaleString("ru"), label: "голосов" },
+                { v: sortedServers.reduce((a, s) => a + s.votes, 0).toLocaleString("ru"), label: "голосов" },
               ].map((s, i) => (
                 <div key={i} className="text-center">
                   <div className="font-display text-2xl font-bold neon-text">{s.v}</div>
@@ -910,65 +917,69 @@ function PricingPage({ setPage }: { setPage: (p: string) => void }) {
             <div className="text-white/30 text-xs font-mono uppercase tracking-widest">// Разовые услуги — без подписки</div>
           </div>
 
-          {/* Виджет — большой блок */}
-          <div className="glass-card border border-cyan-500/20 rounded-2xl p-6 mb-4 hover:border-cyan-500/35 transition-all bg-cyan-500/3">
-            <div className="flex flex-col sm:flex-row gap-6 items-start">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: "#06b6d418", border: "1px solid #06b6d430" }}>
-                    <Icon name="LayoutDashboard" size={18} style={{ color: "#06b6d4" }} />
-                  </div>
-                  <div>
-                    <div className="font-bold text-white text-sm">Живой виджет для вашего сайта</div>
-                    <div className="text-xs text-white/40">Разовая покупка · навсегда</div>
-                  </div>
-                  <div className="ml-auto font-display text-2xl font-bold" style={{ color: "#06b6d4" }}>149₽</div>
+          {/* Виджет — два варианта */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+
+            {/* Бесплатный виджет */}
+            <div className="glass-card border border-white/8 rounded-2xl p-5 flex flex-col hover:border-white/15 transition-all">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-white/5 border border-white/10">
+                  <Icon name="LayoutDashboard" size={16} className="text-white/50" />
                 </div>
-                <p className="text-xs text-white/50 leading-relaxed mb-4">
-                  Вставьте одну строку кода на сайт сервера — и посетители увидят онлайн игроков, статус и кнопку «Подключиться» в реальном времени. Автоматически обновляется каждые 60 секунд. В отличие от статичной картинки ip-games — это живой интерактивный блок.
-                </p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {["Онлайн в реальном времени", "Кнопка «Подключиться»", "Авто-обновление", "5 тем оформления", "Вставка 1 строкой кода"].map(f => (
-                    <span key={f} className="text-[11px] px-2.5 py-1 rounded-full text-cyan-400 bg-cyan-500/10 border border-cyan-500/20">{f}</span>
-                  ))}
+                <div className="flex-1">
+                  <div className="font-bold text-white text-sm">Виджет бесплатный</div>
+                  <div className="text-xs text-white/30">навсегда бесплатно</div>
                 </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setSelectedPlan({ key: "widget" as ServerPlan, name: "Виджет для сайта", price: "149", color: "#06b6d4", highlight: false, features: [], cta: "Купить виджет — 149₽", oneTime: true })}
-                    className="py-2.5 px-6 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90 hover:scale-[1.02]"
-                    style={{ background: "#06b6d4" }}>
-                    Купить виджет — 149₽
-                  </button>
-                  <button
-                    onClick={() => setPage("widget-demo")}
-                    className="py-2.5 px-5 rounded-xl text-sm font-semibold text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/8 transition-all">
-                    Посмотреть демо →
-                  </button>
-                </div>
+                <div className="font-display text-xl font-bold text-white/60">0₽</div>
               </div>
-              {/* превью виджета */}
-              <div className="w-full sm:w-64 flex-shrink-0">
-                <div className="rounded-xl overflow-hidden border border-white/10 bg-[#0f1117]">
-                  <div className="px-4 py-3 flex items-center gap-2 border-b border-white/5">
-                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                    <span className="text-xs text-white/60 font-mono">mineed.ru/widget</span>
-                  </div>
-                  <div className="p-4">
-                    <div className="text-[11px] text-white/30 uppercase tracking-widest mb-1">Ваш сервер</div>
-                    <div className="text-white font-bold text-sm mb-3">CraftRealm SMP</div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ boxShadow: "0 0 6px #22c55e" }} />
-                        <span className="text-xs text-white/70"><span className="text-white font-semibold">847</span>/1200</span>
-                      </div>
-                      <span className="text-[11px] text-white/30">uptime 99.8%</span>
-                    </div>
-                    <div className="w-full py-2 rounded-lg text-xs font-bold text-black text-center" style={{ background: "#22c55e" }}>
-                      Подключиться
-                    </div>
-                  </div>
+              <ul className="space-y-1.5 flex-1 mb-4">
+                {["Онлайн в реальном времени", "Кнопка «Подключиться»", "1 тема оформления", "Ссылка «Powered by MineED»"].map(f => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-white/45">
+                    <Icon name="Check" size={11} className="text-white/30 flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => setPage("widget-demo")}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-white/60 border border-white/12 hover:bg-white/6 transition-all">
+                Получить бесплатно
+              </button>
+            </div>
+
+            {/* Платный виджет */}
+            <div className="rounded-2xl p-5 flex flex-col transition-all hover:border-cyan-500/40" style={{ background: "rgba(6,182,212,0.04)", border: "1px solid rgba(6,182,212,0.25)" }}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#06b6d418", border: "1px solid #06b6d430" }}>
+                  <Icon name="LayoutDashboard" size={16} style={{ color: "#06b6d4" }} />
                 </div>
+                <div className="flex-1">
+                  <div className="font-bold text-white text-sm">Виджет Pro</div>
+                  <div className="text-xs text-white/30">разовая покупка · навсегда</div>
+                </div>
+                <div className="font-display text-xl font-bold" style={{ color: "#06b6d4" }}>149₽</div>
+              </div>
+              <ul className="space-y-1.5 flex-1 mb-4">
+                {["Всё из бесплатного", "5 тем оформления", "Без ссылки на MineED", "Кастомный цвет кнопки", "Компактный и полный форматы"].map(f => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-white/60">
+                    <Icon name="Check" size={11} style={{ color: "#06b6d4" }} className="flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSelectedPlan({ key: "widget" as ServerPlan, name: "Виджет Pro", price: "149", color: "#06b6d4", highlight: false, features: [], cta: "Купить Виджет Pro — 149₽", oneTime: true })}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90"
+                  style={{ background: "#06b6d4" }}>
+                  Купить — 149₽
+                </button>
+                <button
+                  onClick={() => setPage("widget-demo")}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all hover:bg-cyan-500/8"
+                  style={{ color: "#06b6d4", borderColor: "rgba(6,182,212,0.3)" }}>
+                  Демо
+                </button>
               </div>
             </div>
           </div>
@@ -1469,10 +1480,10 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
   const [theme, setTheme] = useState(WIDGET_THEMES[0]);
   const [serverId, setServerId] = useState("12345");
   const [copied, setCopied]     = useState(false);
+  const [compact, setCompact]   = useState(false);
+  const [isPro, setIsPro]       = useState(false);
 
-  const [compact, setCompact] = useState(false);
-
-  const embedCode = `<script src="https://mineed.ru/widget.js" data-server="${serverId}" data-theme="${theme.id}"${compact ? ' data-compact="true"' : ''}></script>`;
+  const embedCode = `<script src="https://mineed.ru/widget.js" data-server="${serverId}"${isPro ? ` data-theme="${theme.id}"` : ''}${compact ? ' data-compact="true"' : ''}${isPro ? ' data-pro="true"' : ''}></script>`;
 
   const copy = async () => {
     try {
@@ -1507,7 +1518,26 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
         {/* Настройки */}
         <div className="space-y-6">
           <div className="glass-card border border-white/8 rounded-2xl p-6">
-            <h3 className="text-white font-semibold mb-4 text-sm">Настройка</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold text-sm">Настройка</h3>
+              <div className="flex gap-1 p-1 bg-white/5 rounded-lg">
+                <button type="button" onClick={() => setIsPro(false)}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${!isPro ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}>
+                  Бесплатный
+                </button>
+                <button type="button" onClick={() => setIsPro(true)}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${isPro ? "text-black" : "text-white/40 hover:text-white/60"}`}
+                  style={isPro ? { background: "#06b6d4" } : {}}>
+                  Pro
+                </button>
+              </div>
+            </div>
+            {!isPro && (
+              <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-white/3 border border-white/8 text-xs text-white/40">
+                <Icon name="Info" size={12} className="flex-shrink-0" />
+                Бесплатный виджет содержит ссылку «MineED» в шапке
+              </div>
+            )}
 
             <div className="mb-5">
               <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-2 block">ID сервера</label>
@@ -1521,23 +1551,25 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
               <p className="text-[11px] text-white/25 mt-1">Найди ID в личном кабинете после добавления сервера</p>
             </div>
 
-            <div>
-              <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-3 block">Тема оформления</label>
-              <div className="flex flex-wrap gap-2">
-                {WIDGET_THEMES.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setTheme(t)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                      theme.id === t.id
-                        ? "border-cyan-400 text-cyan-400 bg-cyan-500/10"
-                        : "border-white/10 text-white/40 hover:border-white/25 hover:text-white/60"
-                    }`}>
-                    {t.label}
-                  </button>
-                ))}
+            {isPro && (
+              <div>
+                <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-3 block">Тема оформления</label>
+                <div className="flex flex-wrap gap-2">
+                  {WIDGET_THEMES.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setTheme(t)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                        theme.id === t.id
+                          ? "border-cyan-400 text-cyan-400 bg-cyan-500/10"
+                          : "border-white/10 text-white/40 hover:border-white/25 hover:text-white/60"
+                      }`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
               <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-3 block">Формат</label>
@@ -1578,12 +1610,18 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
             <p className="text-[11px] text-white/25 mt-3">Вставь этот тег в HTML-код своего сайта там, где хочешь видеть виджет</p>
           </div>
 
-          <button
-            onClick={() => setPage("pricing")}
-            className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90"
-            style={{ background: "#06b6d4" }}>
-            Купить виджет — 149₽
-          </button>
+          {isPro ? (
+            <button
+              onClick={() => setPage("pricing")}
+              className="w-full py-3 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90"
+              style={{ background: "#06b6d4" }}>
+              Купить Виджет Pro — 149₽
+            </button>
+          ) : (
+            <div className="text-center text-xs text-white/30 py-2">
+              Бесплатный виджет — просто скопируй код выше и вставь на сайт
+            </div>
+          )}
         </div>
 
         {/* Превью */}
