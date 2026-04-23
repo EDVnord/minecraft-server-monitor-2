@@ -1393,6 +1393,123 @@ function CabinetPage({ setPage }: { setPage: (p: string) => void }) {
   );
 }
 
+// ─── Oferta Page ───────────────────────────────────────────────────────────────
+
+function OfertaPage({ setPage }: { setPage: (p: string) => void }) {
+  return (
+    <div className="max-w-3xl mx-auto px-5 py-12 text-white/80">
+      <button onClick={() => setPage("home")} className="text-xs text-white/30 hover:text-white/60 mb-8 flex items-center gap-1 transition-colors">
+        ← Назад
+      </button>
+      <h1 className="text-2xl font-bold text-white mb-2">Публичная оферта</h1>
+      <p className="text-xs text-white/30 mb-8">Редакция от 23 апреля 2026 г.</p>
+
+      <section className="space-y-6 text-sm leading-relaxed">
+        <div>
+          <h2 className="text-white font-semibold mb-2">1. Общие положения</h2>
+          <p>Настоящая публичная оферта (далее — «Оферта») является официальным предложением Ергашева Дмитрия Владимировича (далее — «Исполнитель»), ИНН 591455226727, заключить договор на оказание услуг на изложенных ниже условиях.</p>
+          <p className="mt-2">Оплата услуг означает полное и безоговорочное принятие настоящей Оферты в соответствии со ст. 438 ГК РФ.</p>
+        </div>
+
+        <div>
+          <h2 className="text-white font-semibold mb-2">2. Предмет договора</h2>
+          <p>Исполнитель оказывает услуги по предоставлению цифровых товаров — дополнений для продвижения Minecraft-серверов на платформе MineED.ru (далее — «Услуги»). Перечень и стоимость услуг указаны на странице <button onClick={() => setPage("pricing")} className="text-green-400 hover:text-green-300 underline">Тарифы</button>.</p>
+        </div>
+
+        <div>
+          <h2 className="text-white font-semibold mb-2">3. Порядок получения услуги</h2>
+          <p>После успешной оплаты приобретённый тариф активируется автоматически и отображается в личном кабинете пользователя. Физическая доставка не предусмотрена — все товары являются цифровыми и предоставляются в электронном виде на сайте MineED.ru.</p>
+        </div>
+
+        <div>
+          <h2 className="text-white font-semibold mb-2">4. Стоимость и оплата</h2>
+          <p>Стоимость услуг указана на сайте в рублях РФ с учётом всех налогов. Оплата производится через сервис ЮKassa. Исполнитель является самозанятым и уплачивает налог на профессиональный доход.</p>
+        </div>
+
+        <div>
+          <h2 className="text-white font-semibold mb-2">5. Возврат средств</h2>
+          <p>Возврат возможен в течение 24 часов с момента оплаты при условии, что услуга не была активирована. Для возврата обратитесь на <a href="mailto:admin@mineed.ru" className="text-green-400 hover:text-green-300 underline">admin@mineed.ru</a>.</p>
+        </div>
+
+        <div>
+          <h2 className="text-white font-semibold mb-2">6. Ответственность сторон</h2>
+          <p>Исполнитель не несёт ответственности за временную недоступность сервиса по причинам, не зависящим от него. Пользователь несёт ответственность за достоверность предоставляемых данных.</p>
+        </div>
+
+        <div>
+          <h2 className="text-white font-semibold mb-2">7. Контакты</h2>
+          <p>По всем вопросам обращайтесь: <a href="mailto:admin@mineed.ru" className="text-green-400 hover:text-green-300 underline">admin@mineed.ru</a></p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ─── Contacts Page ─────────────────────────────────────────────────────────────
+
+function ContactsPage({ setPage }: { setPage: (p: string) => void }) {
+  return (
+    <div className="max-w-2xl mx-auto px-5 py-12 text-white/80">
+      <button onClick={() => setPage("home")} className="text-xs text-white/30 hover:text-white/60 mb-8 flex items-center gap-1 transition-colors">
+        ← Назад
+      </button>
+      <h1 className="text-2xl font-bold text-white mb-8">Контакты и реквизиты</h1>
+
+      <div className="space-y-6 text-sm">
+        <div className="bg-white/5 rounded-xl p-6 space-y-4">
+          <h2 className="text-white font-semibold text-base">Исполнитель</h2>
+          <div className="space-y-3 text-white/60">
+            <div className="flex justify-between">
+              <span className="text-white/30">Статус</span>
+              <span>Самозанятый</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/30">ФИО</span>
+              <span>Ергашев Дмитрий Владимирович</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/30">ИНН</span>
+              <span className="font-mono">591455226727</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 rounded-xl p-6 space-y-4">
+          <h2 className="text-white font-semibold text-base">Связь</h2>
+          <div className="space-y-3 text-white/60">
+            <div className="flex justify-between">
+              <span className="text-white/30">Email</span>
+              <a href="mailto:admin@mineed.ru" className="text-green-400 hover:text-green-300 transition-colors">admin@mineed.ru</a>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/30">Сайт</span>
+              <span>mineed.ru</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 rounded-xl p-6 space-y-4">
+          <h2 className="text-white font-semibold text-base">Платёжная информация</h2>
+          <div className="space-y-3 text-white/60">
+            <div className="flex justify-between">
+              <span className="text-white/30">Приём платежей</span>
+              <span>ЮKassa</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/30">Валюта</span>
+              <span>Рубль РФ (₽)</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/30">Налоговый режим</span>
+              <span>НПД (самозанятый)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Footer ────────────────────────────────────────────────────────────────────
 
 function Footer({ setPage }: { setPage: (p: string) => void }) {
@@ -1407,7 +1524,8 @@ function Footer({ setPage }: { setPage: (p: string) => void }) {
           <button onClick={() => setPage("home")}    className="hover:text-white/50 transition-colors">Каталог</button>
           <button onClick={() => setPage("add")}     className="hover:text-white/50 transition-colors">Добавить сервер</button>
           <button onClick={() => setPage("pricing")} className="hover:text-white/50 transition-colors">Тарифы</button>
-          <span>Правила</span>
+          <button onClick={() => setPage("oferta")}   className="hover:text-white/50 transition-colors">Оферта</button>
+          <button onClick={() => setPage("contacts")} className="hover:text-white/50 transition-colors">Реквизиты</button>
           <span>Поддержка</span>
         </div>
         <div className="text-xs text-white/18">© 2026 MineED.ru</div>
@@ -1438,6 +1556,8 @@ function AppInner() {
       {page === "pricing"     && <PricingPage    setPage={navigate} />}
       {page === "pay-success" && <PaySuccessPage setPage={navigate} />}
       {page === "cabinet"     && <CabinetPage    setPage={navigate} />}
+      {page === "oferta"      && <OfertaPage     setPage={navigate} />}
+      {page === "contacts"    && <ContactsPage   setPage={navigate} />}
       <Footer setPage={navigate} />
     </div>
   );
