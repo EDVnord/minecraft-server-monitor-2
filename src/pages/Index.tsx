@@ -1481,15 +1481,26 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
 
   const embedCode = `<script src="https://mineed.ru/widget.js" data-server="${serverId}" data-theme="${theme.id}"${compact ? ' data-compact="true"' : ''}></script>`;
 
-  const copy = () => {
-    try { navigator.clipboard.writeText(embedCode); } catch (e) { console.warn(e); }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(embedCode);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = embedCode;
+      ta.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <div className="max-w-4xl mx-auto px-5 py-12">
-      <button onClick={() => setPage("pricing")} className="text-xs text-white/30 hover:text-white/60 mb-8 flex items-center gap-1 transition-colors">
+      <button type="button" onClick={() => setPage("pricing")} className="text-xs text-white/40 hover:text-white/80 mb-8 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/8 hover:border-white/15">
         ← Назад к тарифам
       </button>
 
@@ -1645,7 +1656,7 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
 function OfertaPage({ setPage }: { setPage: (p: string) => void }) {
   return (
     <div className="max-w-3xl mx-auto px-5 py-12 text-white/80">
-      <button onClick={() => setPage("home")} className="text-xs text-white/30 hover:text-white/60 mb-8 flex items-center gap-1 transition-colors">
+      <button type="button" onClick={() => setPage("home")} className="text-xs text-white/40 hover:text-white/80 mb-8 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/8 hover:border-white/15">
         ← Назад
       </button>
       <h1 className="text-2xl font-bold text-white mb-2">Публичная оферта</h1>
@@ -1697,7 +1708,7 @@ function OfertaPage({ setPage }: { setPage: (p: string) => void }) {
 function ContactsPage({ setPage }: { setPage: (p: string) => void }) {
   return (
     <div className="max-w-2xl mx-auto px-5 py-12 text-white/80">
-      <button onClick={() => setPage("home")} className="text-xs text-white/30 hover:text-white/60 mb-8 flex items-center gap-1 transition-colors">
+      <button type="button" onClick={() => setPage("home")} className="text-xs text-white/40 hover:text-white/80 mb-8 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/8 hover:border-white/15">
         ← Назад
       </button>
       <h1 className="text-2xl font-bold text-white mb-8">Контакты и реквизиты</h1>
