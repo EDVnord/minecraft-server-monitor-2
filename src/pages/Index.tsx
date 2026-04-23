@@ -1477,14 +1477,12 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
   const [serverId, setServerId] = useState("12345");
   const [copied, setCopied]     = useState(false);
 
-  const API_BASE = typeof window !== "undefined"
-    ? `${window.location.origin}`
-    : "https://mineed.ru";
+  const [compact, setCompact] = useState(false);
 
-  const embedCode = `<script src="${API_BASE}/widget.js" data-server="${serverId}" data-theme="${theme.id}"></script>`;
+  const embedCode = `<script src="https://mineed.ru/widget.js" data-server="${serverId}" data-theme="${theme.id}"${compact ? ' data-compact="true"' : ''}></script>`;
 
   const copy = () => {
-    navigator.clipboard.writeText(embedCode);
+    try { navigator.clipboard.writeText(embedCode); } catch (e) { console.warn(e); }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -1534,6 +1532,26 @@ function WidgetDemoPage({ setPage }: { setPage: (p: string) => void }) {
                     {t.label}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/30 uppercase tracking-widest font-mono mb-3 block">Формат</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCompact(false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    !compact ? "border-cyan-400 text-cyan-400 bg-cyan-500/10" : "border-white/10 text-white/40 hover:border-white/25 hover:text-white/60"
+                  }`}>
+                  Полная карточка
+                </button>
+                <button
+                  onClick={() => setCompact(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    compact ? "border-cyan-400 text-cyan-400 bg-cyan-500/10" : "border-white/10 text-white/40 hover:border-white/25 hover:text-white/60"
+                  }`}>
+                  Компактная строка
+                </button>
               </div>
             </div>
           </div>
@@ -1775,6 +1793,7 @@ function AppInner() {
   const navigate = (p: string) => {
     if (p !== "pay-success") window.history.replaceState({}, "", window.location.pathname);
     setPage(p);
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
 
   return (
