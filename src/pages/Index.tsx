@@ -498,7 +498,17 @@ function HomePage({ setPage }: { setPage: (p: string) => void }) {
     setServers(prev => prev.map(s => s.id === id ? { ...s, votes } : s));
   };
 
-  const totalOnline = servers.reduce((a, s) => a + s.online, 0);
+  const PLAN_WEIGHT: Record<string, number> = { premium: 0, vip: 1, standard: 2, free: 3 };
+
+  const sortedServers = [...(servers.length > 0 ? servers : DEMO_SERVERS)].sort((a, b) => {
+    const pw = (PLAN_WEIGHT[a.plan] ?? 3) - (PLAN_WEIGHT[b.plan] ?? 3);
+    if (pw !== 0) return pw;
+    if (sort === "votes")  return b.votes - a.votes;
+    if (sort === "online") return b.online - a.online;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const totalOnline = (servers.length > 0 ? servers : DEMO_SERVERS).reduce((a, s) => a + s.online, 0);
 
   return (
     <div className="min-h-screen">
@@ -578,23 +588,6 @@ function HomePage({ setPage }: { setPage: (p: string) => void }) {
       {/* Сетка */}
       <section className="px-5 py-8">
         <div className="max-w-7xl mx-auto">
-          {/* Рекламный баннер */}
-          <div className="mb-6 rounded-2xl neon-border p-5 flex flex-col sm:flex-row items-center justify-between gap-4 bg-green-500/4 relative overflow-hidden">
-            <div className="absolute inset-0 grid-bg opacity-50" />
-            <div className="relative z-10 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-green-500/20 neon-border flex items-center justify-center text-lg">📣</div>
-              <div>
-                <div className="text-xs text-green-400/60 font-mono uppercase tracking-widest">Рекламное место</div>
-                <div className="font-display font-bold text-white text-lg uppercase">Здесь может быть ваш сервер</div>
-                <div className="text-xs text-white/40">Premium размещение — первое место на главной</div>
-              </div>
-            </div>
-            <button onClick={() => setPage("pricing")}
-              className="relative z-10 flex-shrink-0 px-6 py-2.5 bg-green-500 text-black font-bold text-sm rounded-xl hover:bg-green-400 neon-glow transition-all hover:scale-105">
-              Разместить рекламу
-            </button>
-          </div>
-
           {loading ? <Spinner /> : error ? (
             <div className="text-center py-20">
               <Icon name="AlertCircle" size={36} className="mx-auto mb-3 text-red-400/60" />
@@ -612,7 +605,7 @@ function HomePage({ setPage }: { setPage: (p: string) => void }) {
                 </div>
               )}
               <div className="flex flex-col gap-3">
-                {(servers.length > 0 ? servers : DEMO_SERVERS).map((server, i) => (
+                {sortedServers.map((server, i) => (
                   <ServerCard key={server.id} server={server} rank={i + 1} onVoted={handleVoted} />
                 ))}
               </div>
